@@ -2,9 +2,8 @@ import {
   BoxGeometry, Color, ConeGeometry, CylinderGeometry, InstancedMesh, Matrix4, MeshBasicNodeMaterial, MeshStandardNodeMaterial,
   Quaternion, SphereGeometry, Vector3, type BufferGeometry, type Material, type Scene,
 } from "three/webgpu";
-import {
-  abs, color, float, floor, fract, hash, instanceIndex, mix, normalWorld, positionWorld, smoothstep, step, time, vec2, vec3,
-} from "three/tsl";
+import { color, float, fract, hash, instanceIndex, step, time, vec3 } from "three/tsl";
+import { createFacadeMaterial } from "./facade";
 
 type Rng = () => number;
 
@@ -58,7 +57,7 @@ export class Skyline {
   }
 
   build(scene: Scene): void {
-    const building = createTowerMaterial();
+    const building = createFacadeMaterial();
     const glow = new MeshBasicNodeMaterial();
     glow.colorNode = vec3(float(5));
     const metal = new MeshStandardNodeMaterial({ roughness: 0.4, metalness: 0.8, color: 0x15161c });
@@ -76,12 +75,13 @@ export class Skyline {
     );
   }
 
-  private tower(x: number, z: number, h: number): void {
+  /** Place one tower; footprint and heading are random unless given. */
+  tower(x: number, z: number, h: number, shape: { yaw?: number; w?: number; d?: number; kind?: number } = {}): void {
     const r = this.random;
-    const yaw = r() < 0.7 ? 0 : (r() - 0.5) * 0.8; // mostly on the street grid
-    const w = 16 + r() * 26;
-    const d = w * (0.55 + r() * 0.6);
-    const kind = r();
+    const yaw = shape.yaw ?? (r() < 0.7 ? 0 : (r() - 0.5) * 0.8); // mostly on the street grid
+    const w = shape.w ?? 16 + r() * 26;
+    const d = shape.d ?? w * (0.55 + r() * 0.6);
+    const kind = shape.kind ?? r();
     let top = h;
     if (kind < 0.28) {
       // Slab.
@@ -147,48 +147,4 @@ function instanced(geometry: BufferGeometry, material: Material, parts: Part[]):
   });
   mesh.count = parts.length;
   return mesh;
-}
-
-/**
- * Facades with per-tower character: window grid size, floor height, colour
- * temperature and occupancy all come from the instance hash, and a share of towers
- * use vertical LED strips or full-width floor bands instead of windows. Works for
- * boxes and cylinders of any rotation (the horizontal coordinate follows the face).
- */
-function createTowerMaterial(): MeshStandardNodeMaterial {
-  const seed = float(instanceIndex).mul(13.37);
-  const n = normalWorld;
-  const tangent = vec2(n.z.negate(), n.x).normalize();
-  const u = positionWorld.xz.dot(tangent);
-  const v = positionWorld.y;
-  const wall = float(1).sub(step(0.6, abs(n.y)));
-
-  const cellW = mix(float(1.6), float(3.4), hash(seed.add(1)));
-  const floorH = mix(float(3), float(4.2), hash(seed.add(2)));
-  const cell = vec2(u.div(cellW), v.div(floorH));
-  const id = floor(cell);
-  const f = fract(cell);
-  const paneW = mix(float(0.55), float(0.9), hash(seed.add(3)));
-  const pane = smoothstep(0.5, 0.45, abs(f.x.sub(0.5)).div(paneW)).mul(step(0.25, f.y)).mul(step(f.y, 0.8));
-  const occupancy = mix(float(0.25), float(0.8), hash(seed.add(4)));
-  const lit = step(hash(id.x.mul(12.99).add(id.y.mul(78.23)).add(seed)), occupancy);
-  const variation = mix(float(0.5), float(1.2), hash(id.x.add(id.y.mul(5.1)).add(seed.mul(3))));
-
-  const style = hash(seed.add(5));
-  const strips = step(0.9, fract(u.div(mix(float(3), float(6), hash(seed.add(6)))))); // vertical LED strips
-  const bands = step(0.82, fract(v.div(floorH))); // glowing floor slabs
-  const windows = pane.mul(lit).mul(variation);
-  const pattern = mix(mix(windows, strips.mul(0.9), step(0.78, style)), bands.mul(0.8), step(0.9, style));
-
-  const temp = hash(seed.add(7));
-  const light = mix(mix(color(0xffc27a), color(0xdfeaff), step(0.45, temp)), color(0x7fe0ff), step(0.9, temp));
-  const accent = mix(color(0xff2bd6), color(0x00e5ff), hash(seed.add(8)));
-  const lightColour = mix(light, accent, step(0.78, style));
-  const glassy = hash(seed.add(9));
-
-  const material = new MeshStandardNodeMaterial({ metalness: 0.6 });
-  material.colorNode = mix(mix(color(0x191b24), color(0x0c1018), glassy), color(0x05060a), pane.mul(wall));
-  material.roughnessNode = mix(float(0.55), float(0.18), glassy);
-  material.emissiveNode = lightColour.mul(pattern.mul(wall).mul(1.1));
-  return material;
 }

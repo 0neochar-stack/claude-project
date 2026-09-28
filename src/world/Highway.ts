@@ -9,8 +9,9 @@ import type { PhysicsWorld } from "../physics/PhysicsWorld";
 import { addGroundTiles } from "../physics/staticGeometry";
 import {
   createBarrierMaterial, createBasinMaterial, createBillboardMaterial, createFreewayAsphalt, createPalmMaterial, createSkyMaterial,
-  FREEWAY,
+  createSoundWallMaterial, FREEWAY,
 } from "./highwayMaterials";
+import { exitGoreMaterial, GUIDE_SIGNS, guideSignMaterial, speedLimitMaterial } from "./signs";
 import { darkMetal } from "./materials";
 import { createLampMaterial } from "./cityMaterials";
 import { Skyline } from "./Skyline";
@@ -21,6 +22,7 @@ const ROUTE: [number, number][] = [
   [120, 420], [60, 640], [-120, 760], [-340, 700], [-420, 500], [-360, 300], [-460, 150], [-380, 20], [-200, -20],
 ];
 const SAMPLE_SPACING = 4; // metres between road cross-sections
+const SOUND_WALL = 18.5; // lateral position of the sound walls (m)
 const Y = new Vector3(0, 1, 0);
 
 function mulberry32(seed: number) {
@@ -75,7 +77,10 @@ export class Highway {
     this.buildSkyAndBasin();
     this.buildRoad();
     this.buildBarriers();
+    this.buildSoundWalls();
     this.buildLights();
+    this.buildSignGantries();
+    this.buildRoadsideSigns();
     this.buildPalms();
     this.buildBillboards();
     this.buildSkyline();
@@ -236,8 +241,8 @@ export class Highway {
     for (let i = 0; i < this.samples.length; i += 8 + Math.floor(this.random() * 4)) {
       const s = this.samples[i]!;
       const side = this.random() < 0.5 ? -1 : 1;
-      const at = s.centre.clone().addScaledVector(s.right, side * (FREEWAY.halfWidth + 5 + this.random() * 8));
-      if (this.distanceToRoad(at.x, at.z) > FREEWAY.halfWidth + 3) spots.push(at);
+      const at = s.centre.clone().addScaledVector(s.right, side * (FREEWAY.halfWidth + 1.6));
+      if (this.distanceToRoad(at.x, at.z) > FREEWAY.halfWidth + 1) spots.push(at); // between barrier and sound wall
     }
     for (let k = 0; k < 160; k++) {
       const at = new Vector3(-900 + this.random() * 2300, 0, -500 + this.random() * 1700);
@@ -269,14 +274,14 @@ export class Highway {
     for (let i = spacing / 2; i < this.samples.length; i += spacing) {
       const s = this.samples[i]!;
       const side = (i / spacing) % 2 < 1 ? 1 : -1;
-      const at = s.centre.clone().addScaledVector(s.right, side * (FREEWAY.halfWidth + 12));
-      if (this.distanceToRoad(at.x, at.z) < FREEWAY.halfWidth + 8) continue;
+      const at = s.centre.clone().addScaledVector(s.right, side * (SOUND_WALL + 3));
+      if (this.distanceToRoad(at.x, at.z) < SOUND_WALL + 1) continue;
       const toRoad = s.right.clone().multiplyScalar(-side);
       q.setFromAxisAngle(Y, Math.atan2(toRoad.x, toRoad.z));
-      boards.push(new Matrix4().compose(at.clone().setY(13), q, new Vector3(18, 7, 1)));
+      boards.push(new Matrix4().compose(at.clone().setY(15), q, new Vector3(18, 7, 1)));
       for (const off of [-5, 5]) {
         const post = at.clone().addScaledVector(new Vector3(toRoad.z, 0, -toRoad.x), off).setY(5);
-        posts.push(new Matrix4().compose(post, q, new Vector3(1, 10, 1)));
+        posts.push(new Matrix4().compose(post.setY(6), q, new Vector3(1, 12, 1)));
       }
     }
     this.scene.add(
@@ -285,8 +290,109 @@ export class Highway {
     );
   }
 
+  private buildSoundWalls(): void {
+    const material = createSoundWallMaterial();
+    for (const side of [-1, 1]) {
+      const c = side * SOUND_WALL;
+      this.scene.add(new Mesh(this.sweep([[c - 0.15, 0], [c - 0.15, 4.6], [c + 0.15, 4.6], [c + 0.15, 0]]), material));
+    }
+  }
+
+  /** Steel truss gantries spanning the freeway, with Caltrans guide signs for both directions. */
+  private buildSignGantries(): void {
+    const steel = darkMetal(0x7d8189, 0.45);
+    const posts: Matrix4[] = [];
+    const beams: Matrix4[] = [];
+    const lamps: Matrix4[] = [];
+    const backs: Matrix4[] = [];
+    const bySign = GUIDE_SIGNS.map(() => [] as Matrix4[]);
+    const q = new Quaternion();
+    const spacing = Math.round(560 / SAMPLE_SPACING);
+    let signIndex = 0;
+    for (let i = Math.round(140 / SAMPLE_SPACING); i < this.samples.length; i += spacing) {
+      const s = this.samples[i]!;
+      const tangent = new Vector3(s.right.z, 0, -s.right.x);
+      q.setFromAxisAngle(Y, Math.atan2(s.right.x, s.right.z));
+      for (const side of [-1, 1]) {
+        posts.push(new Matrix4().compose(s.centre.clone().addScaledVector(s.right, side * 16.6).setY(4.3), q, new Vector3(0.5, 8.6, 0.5)));
+      }
+      for (const y of [6.2, 8.2]) {
+        beams.push(new Matrix4().compose(s.centre.clone().setY(y), q, new Vector3(0.3, 0.3, 33.6)));
+      }
+      // Right carriageway (travelling +tangent) reads signs facing -tangent, and vice versa.
+      for (const side of [1, -1]) {
+        const facing = tangent.clone().multiplyScalar(-side);
+        const signQ = new Quaternion().setFromAxisAngle(Y, Math.atan2(facing.x, facing.z));
+        for (const lateral of [5.2, 10.4]) {
+          const at = s.centre.clone().addScaledVector(s.right, side * lateral).addScaledVector(facing, 0.35).setY(7.2);
+          bySign[signIndex++ % GUIDE_SIGNS.length]!.push(new Matrix4().compose(at, signQ, new Vector3(4.9, 2.45, 1)));
+          lamps.push(new Matrix4().compose(at.clone().addScaledVector(facing, 0.5).setY(5.85), signQ, new Vector3(3.8, 0.08, 0.3)));
+          backs.push(new Matrix4().compose(at.clone().addScaledVector(facing, -0.09), signQ, new Vector3(9.8, 4.9, 0.14)));
+        }
+      }
+    }
+    this.scene.add(
+      instancedFrom(new BoxGeometry(1, 1, 1), steel, posts),
+      instancedFrom(new BoxGeometry(1, 1, 1), steel, beams),
+      instancedFrom(new BoxGeometry(1, 1, 1), createLampMaterial(), lamps),
+      instancedFrom(new BoxGeometry(1, 1, 1), steel, backs),
+      ...GUIDE_SIGNS.map((sign, k) => instancedFrom(new PlaneGeometry(2, 2), guideSignMaterial(sign), bySign[k]!)),
+    );
+  }
+
+  /** Speed limit and exit signs on posts along the right shoulder. */
+  private buildRoadsideSigns(): void {
+    const speed: Matrix4[] = [];
+    const exits: Matrix4[] = [];
+    const posts: Matrix4[] = [];
+    const spacing = Math.round(420 / SAMPLE_SPACING);
+    this.samples.forEach((s, i) => {
+      if (i % spacing !== Math.round(spacing / 3)) return;
+      const tangent = new Vector3(s.right.z, 0, -s.right.x);
+      for (const side of [1, -1]) {
+        const facing = tangent.clone().multiplyScalar(-side);
+        const q = new Quaternion().setFromAxisAngle(Y, Math.atan2(facing.x, facing.z));
+        const at = s.centre.clone().addScaledVector(s.right, side * (FREEWAY.halfWidth + 1.2));
+        const exit = (i / spacing) % 2 >= 1;
+        (exit ? exits : speed).push(new Matrix4().compose(at.clone().setY(exit ? 2.9 : 2.6), q, exit ? new Vector3(1.8, 0.9, 1) : new Vector3(0.6, 0.75, 1)));
+        posts.push(new Matrix4().compose(at.clone().addScaledVector(facing, -0.05).setY(1.4), q, new Vector3(0.08, 2.8, 0.08)));
+      }
+    });
+    this.scene.add(
+      instancedFrom(new PlaneGeometry(1, 1), speedLimitMaterial(), speed),
+      instancedFrom(new PlaneGeometry(1, 1), exitGoreMaterial(), exits),
+      instancedFrom(new BoxGeometry(1, 1, 1), darkMetal(0x8a8d93, 0.4), posts),
+    );
+  }
+
+  /** A continuous street wall of towers just behind the sound walls, facing the freeway. */
+  private buildStreetWall(skyline: Skyline): void {
+    const n = this.samples.length;
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < n; i += 7 + Math.floor(this.random() * 4)) {
+        const s = this.samples[i]!;
+        const w = 20 + this.random() * 16;
+        const d = 16 + this.random() * 16;
+        const lateral = SOUND_WALL + 4 + d / 2;
+        const centre = s.centre.clone().addScaledVector(s.right, side * lateral);
+        const tangent = new Vector3(s.right.z, 0, -s.right.x);
+        const clear = [[-1, -1], [1, -1], [-1, 1], [1, 1]].every(([a, b]) => {
+          const corner = centre.clone().addScaledVector(tangent, (a! * w) / 2).addScaledVector(s.right, (b! * d) / 2);
+          return this.distanceToRoad(corner.x, corner.z) > SOUND_WALL + 2;
+        });
+        if (!clear) continue;
+        const downtown = 0.5 + 0.5 * Math.sin((i / n) * Math.PI * 6 + 1);
+        const h = 14 + this.random() * (30 + 150 * downtown * downtown);
+        skyline.tower(centre.x, centre.z, h, {
+          yaw: Math.atan2(s.right.x, s.right.z), w, d, kind: this.random() < 0.8 ? this.random() * 0.55 : 0.72 + this.random() * 0.28,
+        });
+      }
+    }
+  }
+
   private buildSkyline(): void {
     const skyline = new Skyline(this.random);
+    this.buildStreetWall(skyline);
     const nearRoad = (min: number) => (x: number, z: number) => this.distanceToRoad(x, z) < min;
     // Downtown, Century City, the Wilshire corridor, Hollywood, Burbank - plus mid-rises
     // and a few towers right beside the freeway so the city looms overhead.

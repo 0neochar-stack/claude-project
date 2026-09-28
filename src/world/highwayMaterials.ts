@@ -1,7 +1,8 @@
 import { BackSide, DoubleSide, MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 import {
-  abs, cameraPosition, color, distance, exp, float, floor, fract, hash, instanceIndex, max, min, mix, mx_fractal_noise_float,
-  mx_noise_float, normalWorld, positionLocal, positionWorld, round, sin, smoothstep, step, time, uv, vec2, vec3,
+  abs, bumpMap, cameraPosition, color, distance, exp, float, floor, fract, hash, instanceIndex, max, min, mix,
+  mx_fractal_noise_float, mx_noise_float, mx_worley_noise_float, mx_worley_noise_vec2, positionLocal, positionWorld, round,
+  sin, smoothstep, step, time, uv, vec2, vec3,
 } from "three/tsl";
 
 /** Freeway cross-section, metres from the centre line (UV u = 0..1 spans ±HALF_WIDTH). */
@@ -42,11 +43,23 @@ export function createFreewayAsphalt(): MeshStandardNodeMaterial {
   const along = v.sub(round(v.div(FREEWAY.lightSpacing)).mul(FREEWAY.lightSpacing));
   const pool = exp(along.mul(along).add(s.sub(FREEWAY.lightReach).pow(2)).div(-2 * 8.5 * 8.5));
 
-  const asphalt = color(0x16171b).mul(mix(0.75, 1.15, grain)).mul(float(1).sub(tyreLanes));
+  // Surface detail: exposed aggregate, crack networks, lane-aligned repair patches, oil drips.
+  const aggregate = smoothstep(0.04, 0.4, mx_worley_noise_float(vec3(p.mul(11), 0)));
+  const cells = mx_worley_noise_vec2(vec3(p.mul(0.32), 0));
+  const crackZone = smoothstep(0.15, 0.45, mx_noise_float(vec3(p.mul(0.04), 7)));
+  const crack = float(1).sub(smoothstep(0, 0.03, cells.y.sub(cells.x))).mul(crackZone).mul(float(1).sub(paint));
+  const patchId = floor(vec2(s.div(3.7), v.div(9)));
+  const patch = step(0.955, hash(patchId.x.mul(17.1).add(patchId.y.mul(3.7))));
+  const laneCentre = float(1).sub(smoothstep(0.08, 0.22, abs(fract(s.sub(1.6).div(3.7)).sub(0.5))));
+  const oil = smoothstep(0.3, 0.75, mx_noise_float(vec3(p.mul(0.9), 3))).mul(laneCentre);
+
+  const asphalt = color(0x16171b).mul(mix(0.75, 1.15, grain)).mul(float(1).sub(tyreLanes))
+    .mul(mix(0.82, 1.18, aggregate)).mul(float(1).sub(crack.mul(0.55))).mul(float(1).sub(oil.mul(0.4))).mul(mix(1, 0.72, patch));
   const material = new MeshStandardNodeMaterial({ metalness: 0 });
   material.colorNode = mix(asphalt, paintColour.mul(0.6), paint).mul(mix(1, 0.5, puddle));
-  material.roughnessNode = mix(mix(float(0.72), float(0.55), tyreLanes.mul(4)), float(0.04), puddle);
-  material.normalNode = normalWorld.add(vec3(ripple.mul(0.06), 0, ripple.mul(0.06))).normalize();
+  material.roughnessNode = mix(mix(mix(float(0.74), float(0.55), tyreLanes.mul(4)), float(0.42), oil), float(0.04), puddle);
+  const height = aggregate.mul(0.4).sub(crack).add(patch.mul(0.25)).add(paint.mul(0.3)).mul(float(1).sub(puddle)).add(ripple.mul(0.6));
+  material.normalNode = bumpMap(height, float(0.03));
   material.emissiveNode = color(0xffcf9a).mul(pool).mul(mix(0.05, 0.22, puddle).add(paint.mul(0.12)));
   return material;
 }
@@ -57,7 +70,7 @@ export function createBarrierMaterial(neonStrip: boolean): MeshStandardNodeMater
   const h = positionLocal.y;
   const material = new MeshStandardNodeMaterial({ roughness: 0.8, metalness: 0 });
   const stain = mx_noise_float(vec3(positionWorld.xz.mul(0.4), h.mul(2))).mul(0.5).add(0.5);
-  material.colorNode = mix(color(0x3a3b42), color(0x23242a), stain.mul(smoothstep(0.6, 0, h)));
+  material.colorNode = mix(color(0x3a3b42), color(0x23242a), stain.mul(float(1).sub(smoothstep(0, 0.6, h))));
   if (neonStrip) {
     material.emissiveNode = color(0x00e5ff).mul(smoothstep(0.98, 1.05, h).mul(2.2));
   } else {
@@ -128,5 +141,25 @@ export function createBillboardMaterial(): MeshBasicNodeMaterial {
   const frame = max(step(q.x, 0.015), max(step(0.985, q.x), max(step(q.y, 0.04), step(0.96, q.y))));
   const material = new MeshBasicNodeMaterial({ side: DoubleSide });
   material.colorNode = mix(mix(a, b, bands).mul(2.2), vec3(3), ring.mul(0.7)).mul(scan).add(vec3(frame.mul(2)));
+  return material;
+}
+
+/** Split-face concrete block sound wall with mortar joints, rain streaks and the odd tag. */
+export function createSoundWallMaterial(): MeshStandardNodeMaterial {
+  const along = uv().y;
+  const h = positionLocal.y;
+  const row = floor(h.div(0.2));
+  const course = fract(along.div(0.4).add(row.mul(0.5)));
+  const mortar = max(step(0.94, fract(h.div(0.2))), step(0.965, course));
+  const block = hash(floor(along.div(0.4).add(row.mul(0.5))).add(row.mul(91.3)));
+  const streaks = mx_noise_float(vec3(along.mul(1.3), h.mul(0.08), 0)).mul(0.5).add(0.5).mul(float(1).sub(smoothstep(1.5, 4.6, h)));
+  const tagZone = step(0.8, mx_noise_float(vec3(along.mul(0.08), 0, 11)).mul(0.5).add(0.5)).mul(step(h, 2.6)).mul(step(0.4, h));
+  const tag = step(0.55, mx_noise_float(vec3(along.mul(1.6), h.mul(1.6), 5)).mul(0.5).add(0.5)).mul(tagZone);
+  const tagColour = mix(color(0xd23b8c), color(0x2bb7d9), step(0.5, hash(floor(along.div(20)))));
+  const material = new MeshStandardNodeMaterial({ metalness: 0 });
+  material.colorNode = mix(mix(color(0x77746d).mul(mix(0.85, 1.1, block)), color(0x3c3a36), streaks.mul(0.6)), color(0x2d2c2a), mortar)
+    .add(tagColour.mul(tag.mul(0.35)));
+  material.roughnessNode = float(0.88);
+  material.normalNode = bumpMap(float(1).sub(mortar).add(block.mul(0.2)), float(0.02));
   return material;
 }
