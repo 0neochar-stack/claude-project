@@ -19,6 +19,18 @@ const CAR_URL = `${import.meta.env.BASE_URL}models/cars/player_car.glb`;
 const FLIP_RECOVERY_TIME = 2;
 
 /**
+ * Loads the car GLB. A `data:` URL is decoded in place instead of fetched, because
+ * sandboxed hosts (e.g. the published artifact build) may block fetching data URLs.
+ */
+async function loadCar(url: string) {
+  const loader = new GLTFLoader();
+  if (!url.startsWith("data:")) return loader.loadAsync(url);
+  const binary = atob(url.slice(url.indexOf(",") + 1));
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return loader.parseAsync(bytes.buffer, "");
+}
+
+/**
  * Composition root for the Phase 1 test pad. Owns every system and runs the
  * frame: input -> fixed-step physics (120 Hz) -> interpolated visuals -> camera,
  * rumble, HUD -> render.
@@ -41,7 +53,7 @@ export class Game {
     container.append(renderer.domElement);
     await renderer.init();
 
-    const [physics, gltf] = await Promise.all([PhysicsWorld.create(), new GLTFLoader().loadAsync(CAR_URL)]);
+    const [physics, gltf] = await Promise.all([PhysicsWorld.create(), loadCar(CAR_URL)]);
     const scene = new Scene();
     const track = new TestTrack(scene, physics, renderer);
     physics.step(FIXED_STEP); // scene queries (suspension casts) only see colliders after a step
