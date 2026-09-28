@@ -83,7 +83,7 @@ export class TestTrack {
   }
 
   /** Stand every cone back up where it started. */
-  resetCones(): void {
+  resetProps(): void {
     for (const cone of this.cones) {
       cone.body.setTranslation(cone.home, true);
       cone.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
@@ -267,7 +267,7 @@ export class TestTrack {
  * Reflection environment for the car paint: a dark room with neon panels,
  * pre-filtered once with PMREM. Cheap and reads as a night city.
  */
-function createNeonEnvironment(renderer: WebGPURenderer) {
+export function createNeonEnvironment(renderer: WebGPURenderer) {
   const env = new Scene();
   env.background = new Color(0x020308);
   const panel = (w: number, h: number, hex: number, k: number, x: number, y: number, z: number) => {

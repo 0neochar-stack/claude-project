@@ -9,6 +9,9 @@ import { InputManager } from "../input/InputManager";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
 import { Hud } from "../ui/Hud";
 import { PlayerCar } from "../vehicles/PlayerCar";
+import { createRain } from "../fx/Rain";
+import { VehicleFX } from "../fx/VehicleFX";
+import { NeonCity } from "../world/NeonCity";
 import { TestTrack } from "../world/TestTrack";
 import { FixedStepLoop } from "./FixedStepLoop";
 import { DEG } from "./math";
@@ -40,6 +43,7 @@ export class Game {
   private readonly input = new InputManager();
   private readonly haptics = new Haptics();
   private readonly chase = new ChaseCamera();
+  private readonly fx: VehicleFX;
   private lastTime = performance.now();
   private flippedFor = 0;
 
@@ -55,7 +59,11 @@ export class Game {
 
     const [physics, gltf] = await Promise.all([PhysicsWorld.create(), loadCar(CAR_URL)]);
     const scene = new Scene();
-    const track = new TestTrack(scene, physics, renderer);
+    // The rainy neon street by default; the Phase 1 grid pad with ramps via ?pad.
+    const track = new URLSearchParams(location.search).has("pad")
+      ? new TestTrack(scene, physics, renderer)
+      : new NeonCity(scene, physics, renderer);
+    if (track instanceof NeonCity) scene.add(createRain());
     physics.step(FIXED_STEP); // scene queries (suspension casts) only see colliders after a step
     const car = new PlayerCar(scene, physics, parseVehicleRig(gltf.scene), track.spawn);
     return new Game(renderer, scene, physics, track, car, new Hud(container));
@@ -67,11 +75,12 @@ export class Game {
     private readonly renderer: WebGPURenderer,
     scene: Scene,
     private readonly physics: PhysicsWorld,
-    private readonly track: TestTrack,
+    private readonly track: TestTrack | NeonCity,
     private readonly car: PlayerCar,
     private readonly hud: Hud,
   ) {
     this.chase.setAspect(window.innerWidth / window.innerHeight);
+    this.fx = new VehicleFX(scene);
     this.pipeline = new RenderPipeline(renderer);
     const colour = pass(scene, this.chase.camera).getTextureNode("output");
     this.pipeline.outputNode = colour.add(bloom(colour, 0.6, 0.25, 1));
@@ -130,6 +139,7 @@ export class Game {
     car.render(alpha, dt);
     this.track.update();
     this.track.followSun(car.position);
+    this.fx.update(dt, car.vehicle);
 
     const t = car.vehicle.telemetry;
     const events = car.vehicle.consumeEvents();
@@ -175,7 +185,8 @@ export class Game {
 
   private resetCar(): void {
     this.car.reset(this.track.spawn);
-    this.track.resetCones();
+    this.track.resetProps();
+    this.fx.reset();
     this.chase.reset();
     this.hud.toast("Car reset");
   }
