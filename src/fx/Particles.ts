@@ -1,7 +1,9 @@
 import {
   DynamicDrawUsage, InstancedBufferAttribute, Mesh, NormalBlending, PlaneGeometry, SpriteNodeMaterial, Vector3,
 } from "three/webgpu";
-import { color, float, instancedDynamicBufferAttribute, mx_noise_float, smoothstep, uv, vec3 } from "three/tsl";
+import {
+  cameraPosition, color, distance, float, instancedDynamicBufferAttribute, mx_noise_float, smoothstep, uv, vec3,
+} from "three/tsl";
 
 export interface ParticleStyle {
   max: number;
@@ -49,7 +51,9 @@ export class Particles {
     material.positionNode = instancedDynamicBufferAttribute(this.position);
     material.scaleNode = instancedDynamicBufferAttribute(this.size);
     material.colorNode = color(style.colour);
-    material.opacityNode = float(1).sub(smoothstep(0.2, 1, centre)).mul(wisps).mul(instancedDynamicBufferAttribute(this.alpha, "float"));
+    const clearOfLens = smoothstep(2.5, 7, distance(instancedDynamicBufferAttribute(this.position, "vec3"), cameraPosition));
+    material.opacityNode = float(1).sub(smoothstep(0.2, 1, centre)).mul(wisps).mul(clearOfLens)
+      .mul(instancedDynamicBufferAttribute(this.alpha, "float"));
     this.mesh = new Mesh(new PlaneGeometry(1, 1), material);
     this.mesh.count = n;
     this.mesh.frustumCulled = false;

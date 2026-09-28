@@ -1,6 +1,7 @@
 import { AgXToneMapping, PCFShadowMap, RenderPipeline, Scene, Vector3, WebGPURenderer } from "three/webgpu";
-import { pass } from "three/tsl";
+import { pass, renderOutput } from "three/tsl";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
+import { fxaa } from "three/addons/tsl/display/FXAANode.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { parseVehicleRig } from "../assets/vehicleRig";
 import { ChaseCamera } from "../camera/ChaseCamera";
@@ -11,8 +12,10 @@ import { Hud } from "../ui/Hud";
 import { PlayerCar } from "../vehicles/PlayerCar";
 import { createRain } from "../fx/Rain";
 import { VehicleFX } from "../fx/VehicleFX";
+import { Highway } from "../world/Highway";
 import { NeonCity } from "../world/NeonCity";
 import { TestTrack } from "../world/TestTrack";
+import { DynamicResolution } from "./DynamicResolution";
 import { FixedStepLoop } from "./FixedStepLoop";
 import { DEG } from "./math";
 
@@ -44,12 +47,13 @@ export class Game {
   private readonly haptics = new Haptics();
   private readonly chase = new ChaseCamera();
   private readonly fx: VehicleFX;
+  private readonly resolution: DynamicResolution;
   private lastTime = performance.now();
   private flippedFor = 0;
 
   static async create(container: HTMLElement): Promise<Game> {
-    const renderer = new WebGPURenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // No MSAA: FXAA in the post chain is far cheaper at high resolutions.
+    const renderer = new WebGPURenderer({ antialias: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.toneMapping = AgXToneMapping;
     renderer.shadowMap.enabled = true;
@@ -59,11 +63,12 @@ export class Game {
 
     const [physics, gltf] = await Promise.all([PhysicsWorld.create(), loadCar(CAR_URL)]);
     const scene = new Scene();
-    // The rainy neon street by default; the Phase 1 grid pad with ramps via ?pad.
-    const track = new URLSearchParams(location.search).has("pad")
+    // LA freeway by default; the downtown street grid via ?city, the Phase 1 grid pad via ?pad.
+    const params = new URLSearchParams(location.search);
+    const track = params.has("pad")
       ? new TestTrack(scene, physics, renderer)
-      : new NeonCity(scene, physics, renderer);
-    if (track instanceof NeonCity) scene.add(createRain());
+      : params.has("city") ? new NeonCity(scene, physics, renderer) : new Highway(scene, physics, renderer);
+    if (!(track instanceof TestTrack)) scene.add(createRain());
     physics.step(FIXED_STEP); // scene queries (suspension casts) only see colliders after a step
     const car = new PlayerCar(scene, physics, parseVehicleRig(gltf.scene), track.spawn);
     return new Game(renderer, scene, physics, track, car, new Hud(container));
@@ -75,15 +80,17 @@ export class Game {
     private readonly renderer: WebGPURenderer,
     scene: Scene,
     private readonly physics: PhysicsWorld,
-    private readonly track: TestTrack | NeonCity,
+    private readonly track: TestTrack | NeonCity | Highway,
     private readonly car: PlayerCar,
     private readonly hud: Hud,
   ) {
     this.chase.setAspect(window.innerWidth / window.innerHeight);
     this.fx = new VehicleFX(scene);
+    this.resolution = new DynamicResolution(renderer);
     this.pipeline = new RenderPipeline(renderer);
+    this.pipeline.outputColorTransform = false; // tone map before FXAA
     const colour = pass(scene, this.chase.camera).getTextureNode("output");
-    this.pipeline.outputNode = colour.add(bloom(colour, 0.6, 0.25, 1));
+    this.pipeline.outputNode = fxaa(renderOutput(colour.add(bloom(colour, 0.6, 0.25, 1))));
 
     window.addEventListener("resize", () => {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -178,8 +185,10 @@ export class Game {
       rumble: this.haptics.levels,
       rumbleEnabled: this.haptics.enabled,
       cameraMode: this.chase.mode,
+      perf: this.resolution.label,
     }, dt);
 
+    this.resolution.update(dt);
     this.pipeline.render();
   };
 

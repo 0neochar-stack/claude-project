@@ -24,7 +24,7 @@ export function createWetAsphalt(): { material: MeshStandardNodeMaterial; reflec
   const p = positionWorld.xz;
 
   // --- Puddles and rain ripples.
-  const puddle = smoothstep(0.08, 0.28, mx_fractal_noise_float(vec3(p.mul(0.045), 0), 3));
+  const puddle = smoothstep(0.3, 0.44, mx_fractal_noise_float(vec3(p.mul(0.05), 0), 3));
   const ripplePhase = time.mul(2.2);
   const ripple = mx_noise_float(vec3(p.mul(3.2), ripplePhase)).mul(0.6)
     .add(mx_noise_float(vec3(p.mul(9), ripplePhase.mul(1.7))).mul(0.4));
@@ -51,16 +51,16 @@ export function createWetAsphalt(): { material: MeshStandardNodeMaterial; reflec
   const paintColour = mix(color(0xd8e4ff), color(0xffc247), centreLine);
 
   // --- Mirror reflection, distorted by ripples, strongest in puddles and at grazing angles.
-  const reflection = reflector({ resolutionScale: 0.6 });
+  const reflection = reflector({ resolutionScale: 0.4 });
   reflection.target.rotateX(-Math.PI / 2);
   reflection.uvNode = reflection.uvNode!.add(vec2(ripple.mul(0.006).add(grain.mul(0.004)), ripple.mul(0.004)));
   const view = positionWorld.sub(cameraPosition).normalize();
   const grazing = float(1).sub(abs(view.y)).pow(3);
-  const wetness = mix(float(0.18), float(0.95), puddle).mul(mix(0.55, 1, grazing)).mul(float(1).sub(paint.mul(0.6)));
+  const wetness = mix(float(0.03), float(0.9), puddle).mul(mix(0.55, 1, grazing)).mul(float(1).sub(paint.mul(0.6)));
 
   const material = new MeshStandardNodeMaterial({ metalness: 0 });
   material.colorNode = mix(color(0x0b0c10).mul(mix(0.7, 1.2, grain)), paintColour.mul(0.55), paint).mul(mix(1, 0.55, puddle));
-  material.roughnessNode = mix(mix(float(0.42), float(0.03), puddle), float(0.35), paint);
+  material.roughnessNode = mix(mix(float(0.68), float(0.03), puddle), float(0.4), paint);
   material.normalNode = normalWorld.add(vec3(ripple.mul(0.05).mul(puddle), 0, ripple.mul(0.05).mul(puddle))).normalize();
   material.emissiveNode = reflection.rgb.mul(wetness);
   return { material, reflectorTarget: reflection.target };

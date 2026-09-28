@@ -48,7 +48,7 @@ const FOV = {
  * pulls back under acceleration, and kicks the FOV wider when you floor it.
  */
 export class ChaseCamera {
-  readonly camera = new PerspectiveCamera(FOV.base, 16 / 9, 0.1, 1000);
+  readonly camera = new PerspectiveCamera(FOV.base, 16 / 9, 0.25, 12_000);
   mode: CameraMode = "chase";
 
   private yaw = 0;

@@ -8,7 +8,7 @@ import { cameraPosition, float, fract, hash, instanceIndex, mix, positionLocal, 
  * and time, wrapped in a box that follows the camera, so it costs no CPU per frame.
  * Drops are world-stable (they don't slide with the camera) and splash on the road.
  */
-export function createRain(drops = 16_000, splashes = 1_800): Group {
+export function createRain(drops = 9_000, splashes = 700): Group {
   const group = new Group();
   group.add(createStreaks(drops), createSplashes(splashes));
   return group;
@@ -37,7 +37,7 @@ function createStreaks(count: number): InstancedMesh {
   const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
   material.positionNode = positionLocal.add(vec3(x, y, z));
   material.colorNode = vec3(0.62, 0.72, 0.95);
-  const near = smoothstep(2, 7, vec3(x, y, z).sub(cameraPosition).length()); // no giant streaks across the lens
+  const near = smoothstep(4, 11, vec3(x, y, z).sub(cameraPosition).length()); // no giant streaks across the lens
   material.opacityNode = mix(float(0.1), float(0.28), hash(seed.add(0.7))).mul(step(0, y)).mul(near); // nothing below the road
   const mesh = new InstancedMesh(geometry, material, count);
   mesh.frustumCulled = false;
@@ -54,7 +54,7 @@ function createSplashes(count: number): InstancedMesh {
   const size = 38;
   const px = hash(seed.add(generation.mul(0.37)).add(0.1)).sub(0.5).mul(size).add(cameraPosition.x);
   const pz = hash(seed.add(generation.mul(0.53)).add(0.2)).sub(0.5).mul(size).add(cameraPosition.z);
-  const scale = mix(float(0.03), float(0.32), phase);
+  const scale = mix(float(0.02), float(0.2), phase);
 
   const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
   material.positionNode = positionLocal.mul(scale).add(vec3(px, 0.025, pz));

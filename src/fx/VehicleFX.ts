@@ -15,7 +15,7 @@ const SKID_STEP = 0.3; // metres between skid segments
  */
 export class VehicleFX {
   private readonly smoke = new Particles({
-    max: 900, colour: 0x8f8ea6, opacity: 0.2, sizeStart: 0.6, sizeGrowth: 1.6, life: [1.6, 2.6], drag: 1.4, lift: 0.7,
+    max: 900, colour: 0x8f8ea6, opacity: 0.16, sizeStart: 0.5, sizeGrowth: 1.4, life: [1.6, 2.6], drag: 1.4, lift: 0.7,
   });
   private readonly spray = new Particles({
     max: 700, colour: 0x9fb8ec, opacity: 0.12, sizeStart: 0.35, sizeGrowth: 1.6, life: [0.35, 0.7], drag: 3, lift: -2,

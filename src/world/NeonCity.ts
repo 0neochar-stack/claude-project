@@ -118,7 +118,7 @@ export class NeonCity {
       }
     }
     this.instancedBoxes(slabs, createSidewalk(), false);
-    this.instancedBoxes(towers, createBuildingMaterial(), true);
+    this.instancedBoxes(towers, createBuildingMaterial(), false);
 
     const { R, world } = this.physics;
     for (const s of slabs) {

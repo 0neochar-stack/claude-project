@@ -16,6 +16,7 @@ export interface HudFrame {
   rumble: RumbleLevels;
   rumbleEnabled: boolean;
   cameraMode: CameraMode;
+  perf?: string;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = ""): HTMLElementTagNameMap[K] => {
@@ -116,7 +117,7 @@ export class Hud {
     this.rumbleWeak.style.transform = `scaleX(${f.rumble.weak})`;
     this.rumbleStrong.style.transform = `scaleX(${f.rumble.strong})`;
     this.text(this.rumbleLabel, f.rumbleEnabled ? "Rumble" : "Rumble (off)");
-    this.text(this.camera, `Camera: ${f.cameraMode}`);
+    this.text(this.camera, `Camera: ${f.cameraMode}${f.perf ? `   ·   ${f.perf}` : ""}`);
 
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
