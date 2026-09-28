@@ -7,9 +7,14 @@
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #05060a; }
       canvas { display: block; }
+      #boot-status {
+        position: fixed; inset: 0; display: grid; place-items: center;
+        color: #00e5ff; font: 500 14px ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.2em;
+      }
     </style>
   </head>
   <body>
+    <div id="boot-status">LOADING TEST PAD…</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -100,7 +100,12 @@ Root `extras` (become `userData` in three.js):
 | `wheelbase`, `track_front`, `track_rear` | `2.7`, `1.68`, `1.7` | Vehicle model |
 | `wheel_radius`, `tire_width_front`, `tire_width_rear` | `0.34`, `0.26`, `0.31` | Suspension rays, visuals |
 
-### Using it from the game (Phase 1 `VehicleVisual`)
+### Using it from the game
+
+`src/assets/vehicleRig.ts` (`parseVehicleRig`) turns this contract into typed data, and
+`src/vehicles/PlayerCar.ts` drives it. Tyre colliders and suspension casts are placed at the
+`WHEEL_*` sockets, and headlight / underglow / brake lights hang on the `SOCKET_*` empties.
+The essentials:
 
 ```ts
 const root = gltf.scene.getObjectByName("player_car")!;

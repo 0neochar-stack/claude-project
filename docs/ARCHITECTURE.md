@@ -5,9 +5,10 @@ neon city at night. This document is the technical blueprint: what the stack is,
 how the runtime is organised, and how each headline feature (the two game modes,
 the atmosphere, controller support, and Blender assets) is going to be built.
 
-> Status: **Phase 0**. The toolchain, this plan and the Blender car generator
-> exist; the game systems below are the design. See [ROADMAP.md](ROADMAP.md) for
-> build order, and [BLENDER_PIPELINE.md](BLENDER_PIPELINE.md) for the asset contract.
+> Status: **Phase 1**. Input (keyboard + gamepad + rumble), the Rapier arcade drift
+> model, the follow camera and a test pad are built and tested (sections 3-4 describe
+> them as implemented). Later sections are still the design. See [ROADMAP.md](ROADMAP.md)
+> for build order, and [BLENDER_PIPELINE.md](BLENDER_PIPELINE.md) for the asset contract.
 
 ---
 
@@ -73,77 +74,111 @@ interface GameMode {
 
 ## 3. Controls: keyboard + full gamepad support
 
-Every device is reduced to the same per-frame snapshot. Gameplay never reads a device
-directly.
+Every device is reduced to the same per-frame snapshot (`input/InputManager.ts`).
+Gameplay never reads a device directly. Keyboard and controller work at the same time.
 
 ```ts
 interface DriveInput {
   steer: number;      // -1 (left) .. 1 (right), already deadzoned and curved
   throttle: number;   // 0..1
-  brake: number;      // 0..1 (also reverse when stopped)
+  brake: number;      // 0..1 (also reverse once stopped)
   handbrake: boolean;
-  boost: boolean;
 }
 ```
 
 | Action | Keyboard | Gamepad (W3C "standard" mapping) |
 |---|---|---|
-| Steer | A / D, Left / Right | Left stick X `axes[0]`: radial deadzone 0.12, response curve `sign(x)*abs(x)^1.6` |
-| Throttle | W / Up | RT `buttons[7].value` (analogue) |
-| Brake / reverse | S / Down | LT `buttons[6].value` (analogue) |
-| Handbrake (drift) | Space | A / Cross `buttons[0]`, also RB `buttons[5]` |
-| Boost | Shift | X / Square `buttons[2]` |
-| Camera | C | Y / Triangle `buttons[3]`, right stick looks around |
-| Reset car | R | Back / Select `buttons[8]` |
-| Pause | Esc | Start `buttons[9]` |
+| Steer | A / D, ← / → | Left stick X `axes[0]`: deadzone 0.1 (rescaled), outer deadzone 0.02, curve `sign(x)·|x|^1.5` |
+| Throttle | W / ↑ | RT / R2 `buttons[7].value` (analogue, 4% deadzone) |
+| Brake / reverse | S / ↓ | LT / L2 `buttons[6].value` (analogue) |
+| Handbrake (drift) | Space | A / Cross `buttons[0]` |
+| Camera: next view + reset behind car | R | Y / Triangle `buttons[3]` |
+| Look around | – | Right stick `axes[2..3]` |
+| Reset car (and cones) | Backspace | View / Share `buttons[8]` |
+| Help overlay | H | Menu / Options `buttons[9]` |
+| Rumble on / off | V | – |
+| *Boost, pause (later phases)* | *Shift, Esc* | *X / Square, Start* |
 
-- **Keyboard feels analogue.** Digital steering ramps toward its target, and the return
-  speed scales with vehicle speed. Throttle and brake ramp over about 80 ms.
+- **Keyboard feels analogue.** Steering ramps in over ~0.22 s and returns faster; the
+  pedals ramp over ~80 ms. Keys use `KeyboardEvent.code`, so WASD works on any layout.
 - **Polling.** The Gamepad API is poll-only for state, so `GamepadDevice` reads
-  `navigator.getGamepads()` once per frame. `gamepadconnected`/`gamepaddisconnected` handle
-  hot-plug, and the most recently used device drives the on-screen button prompts. Browsers
-  only expose a pad after a button press, so the title screen says "Press any button".
-- **Haptics** (`input/Haptics.ts`), all feature-detected and rate-limited, with a global
-  intensity setting:
+  `navigator.getGamepads()` once per frame and detects button edges itself. The pad that
+  last produced input is the active one (hot-plug and a second pad just work). Browsers
+  only expose a pad after a button press, so the HUD says "press any button".
+- **Haptics** (`input/Haptics.ts`): a mix recomputed every frame from vehicle telemetry,
+  sent at most every 50 ms as 110 ms effects so they overlap without gaps.
 
   | Event | Effect |
   |---|---|
-  | Engine | weak motor, low level scaled by RPM |
-  | Drift / wheelspin | strong motor scaled by rear slip |
-  | Impact | short full-strength burst scaled by impulse |
-  | Near miss | 40 ms weak tick |
-  | Trigger feedback | `"trigger-rumble"` (impulse triggers, when `vibrationActuator.effects` lists it): throttle trigger on wheelspin, brake trigger on lock-up |
+  | Acceleration | weak motor: light buzz on throttle, surging with actual acceleration |
+  | Drift / wheelspin | strong motor scaled by rear slip (plus a little weak motor) |
+  | Collision | full-strength burst scaled by contact force (log scale), decaying over ~0.3 s |
+  | Hard landing | strong burst scaled by vertical speed |
+  | Trigger feedback | `"trigger-rumble"` when `vibrationActuator.effects` lists it (Xbox impulse triggers): right trigger on wheelspin/launch, left trigger on brake/handbrake lock |
 
-  The API is `gamepad.vibrationActuator.playEffect("dual-rumble", …)`, falling back to
-  `hapticActuators[0].pulse()` where only that exists.
+  The API is `gamepad.vibrationActuator.playEffect("trigger-rumble" | "dual-rumble", …)`,
+  falling back to Firefox's `hapticActuators[0].pulse()`. Rumble stops on window blur.
 - Bindings live in `config/bindings.ts`. Remapping UI comes in Phase 5.
 
 ---
 
 ## 4. Driving model: arcade drift
 
-`physics/vehicle/ArcadeVehicle.ts` sits on a single Rapier dynamic body:
+`physics/vehicle/ArcadeVehicle.ts` sits on a single Rapier dynamic body, stepped at 120 Hz:
 
-1. **Chassis.** Convex hull collider from the GLB's `COL_body` node. Mass, wheelbase, track
-   and wheel radius come from the GLB root's `extras` (see pipeline doc). The centre of mass
-   is lowered artificially for stability.
-2. **Suspension.** Four ray casts down from the `WHEEL_*` pivots, each a spring plus damper
-   with anti-roll between axle pairs. The contact point, normal and surface type feed the
-   tyres and FX.
-3. **Tyres.** Per wheel:
-   - Longitudinal force from an arcade torque curve (no gears, a "virtual shift" sound only)
-     and braking.
-   - Lateral force from slip angle through an authored grip curve: rises to a peak around
-     8°, then falls to a plateau.
-4. **Drift layer** (`DriftAssist.ts`):
-   - Handbrake, or a flick at speed, drops rear grip into the plateau.
-   - While drifting, the assist holds the drift angle, adds counter-steer help, and limits
-     speed loss so drifts stay fast.
-   - Exiting a long drift grants a short boost.
-5. **Outputs** for FX, audio and scoring: per-wheel slip and contact point, drift angle,
-   speed, and whether the car is airborne.
+1. **Chassis.** Convex-hull collider from the GLB's `COL_body` node, with mass from the root
+   `extras` and an explicit centre of mass (0.4 m) and box-approximated inertia. CCD is on,
+   so it can't tunnel through walls.
+2. **Wheels = physical tyre colliders + shape-cast suspension.** Each `WHEEL_*` socket gets
+   a tyre-shaped cylinder collider on the chassis. Collision layers (`physics/groups.ts`)
+   let tyres hit walls, pylons, kerbs and cones but not the road. The road contact belongs
+   to the suspension, which sweeps the *same cylinder* down from the socket each step: the
+   car rides ramp lips and kerbs on real tyre geometry, not a thin ray. If a sweep slips
+   through a seam between ground colliders, a ray from the hub is the fallback.
+   Fully simulated wheel bodies on joints were rejected: they are unstable at speed and
+   fight authored handling.
+3. **Springs.** Spring-damper per corner, sized so the static load puts each hub exactly
+   at its modelled socket (1.9 Hz, ζ 0.5), with anti-roll bars moving load across each axle.
+   Force acts along the contact normal.
+4. **Tyres.** Rear-wheel drive with an arcade power curve (0–100 km/h in 3.9 s, ~250 km/h
+   top). Lateral force follows an authored slip-angle curve (linear to a 7° peak, easing to
+   a 78% slide plateau), blended to velocity-cancelling grip near standstill. A friction
+   circle lets drive/brake force eat lateral grip; soft traction control applies outside drifts.
+5. **Drift layer** (`DriftAssist.ts`):
+   - **Traction loss.** The handbrake drops rear grip to 38% and kicks the yaw when pulled
+     with steering at speed. Drift mode needs intent (a handbrake pull in the last 0.75 s,
+     or a full-throttle power-over), so ordinary cornering never becomes a drift.
+   - **Drift-angle assist.** Front wheels auto counter-steer toward the direction of
+     travel. A yaw assist steers the slide toward a target angle: throttle holds ~30°,
+     steering into the turn deepens it to 46°, a full counter-steer or lifting off lets
+     it close and exit. A hard guard stops spin-outs past 62°.
+   - **Speed retention.** While drifting, part of the speed that the sideways tyre forces
+     scrub off is handed back along the direction of travel. Counter-steering raises
+     the share (30% up to 85%), so counter-steered slides keep their speed.
+   - **Stability.** Outside drift mode, slides past 3° are gently pulled back in line,
+     and yaw is damped hands-off so the car tracks straight.
+6. **Also:** reverse (brake at a standstill), drag and downforce, air control that levels
+   the car for landings, and recovery onto its wheels after 2 s upside down.
+7. **Outputs** (`VehicleTelemetry`) for the camera, rumble and HUD: speed, slip angle,
+   drift state and time, grounded wheels, air time, smoothed acceleration, rear slip,
+   wheelspin, brake lock, plus impact / landing events from Rapier contact-force events.
 
-All tunables live in `config/vehicles.ts`, with a dev-only `lil-gui` panel for live tuning.
+All tunables live in `config/vehicleTuning.ts`. Open the game with `?tune` for a live
+`lil-gui` panel. Behaviour is pinned by headless scenario tests
+(`physics/vehicle/ArcadeVehicle.test.ts`) that drive the real GLB through launch, braking,
+cornering, drift entry and exit, speed retention, a ramp jump, a wall hit and kerb strikes.
+
+### Follow camera (`camera/ChaseCamera.ts`)
+
+Chase, far-chase and hood views (Y / R cycles and snaps behind the car).
+- **Rotational lag.** The camera trails the heading and swings 30–55% toward the
+  direction of travel, more while drifting.
+- **Dynamic speed lag.** Follow distance grows with speed and pulls back further under
+  acceleration (up to 12 m/s² × 0.1 m), then eases in.
+- **FOV.** 58° + up to 16° with speed, plus a kick of up to 9° that rises fast under
+  hard acceleration and relaxes slowly.
+- **Also:** heavier vertical smoothing hides suspension and landing bounce, the right
+  stick orbits, and impacts and hard landings shake the camera.
 
 ---
 
@@ -268,23 +303,26 @@ integrated graphics.
 │   ├── textures/                 P2  KTX2: asphalt, puddle masks, window & sign atlases
 │   └── audio/                    P5
 └── src/
-    ├── main.ts                   ✅  Phase 0 smoke test -> boots Game in P1
-    ├── core/                     P1  Game, Loop (fixed step), EventBus, StateMachine, Pool
-    ├── config/                   P1  bindings, vehicles, quality, modes
-    ├── assets/                   P1  AssetLibrary (GLTF + meshopt + KTX2, naming-contract parsing)
-    ├── input/                    P1  InputManager, KeyboardDevice, GamepadDevice, Haptics, actions
-    ├── physics/                  P1  PhysicsWorld, vehicle/{ArcadeVehicle, Suspension, TireModel, DriftAssist}
-    ├── vehicles/                 P1  PlayerCar, VehicleVisual (wheels/lights/neon from GLB), VehicleFX; P4 TrafficCar
-    ├── camera/                   P1  ChaseCamera, CameraShake
+    ├── main.ts                   ✅  boots Game; `?tune` adds the tuning panel
+    ├── core/                     ✅  Game (composition root), FixedStepLoop (120 Hz), math
+    │                             P3  EventBus, StateMachine, Pool
+    ├── config/                   ✅  bindings, vehicleTuning;  P2 quality;  P3 modes
+    ├── assets/                   ✅  vehicleRig (GLB naming contract -> wheels, sockets, hull, extras)
+    │                             P2  AssetLibrary (meshopt + KTX2 loaders, caching)
+    ├── input/                    ✅  InputManager, KeyboardDevice, GamepadDevice, curves, Haptics
+    ├── physics/                  ✅  PhysicsWorld, groups, staticGeometry, vehicle/{ArcadeVehicle, TireModel, DriftAssist}
+    ├── vehicles/                 ✅  PlayerCar (GLB visuals, wheels, lights);  P2 VehicleFX;  P4 TrafficCar
+    ├── camera/                   ✅  ChaseCamera (chase / far / hood, speed lag, FOV kick, shake)
     ├── render/                   P2  Renderer, PostStack, QualityManager, materials/{WetAsphalt, Neon, Hologram, Windows}
     ├── fx/                       P2  Rain, Splashes, TireSmoke, SkidMarks, Spray, LensDroplets
-    ├── world/                    P3  Environment; city/{CityGenerator, ChunkStreamer, DriftZones}
+    ├── world/                    ✅  TestTrack (grid pad, ramps, pylons, cones), materials
+    │                             P3  Environment; city/{CityGenerator, ChunkStreamer, DriftZones}
     │                             P4  highway/{HighwayStreamer, FloatingOrigin}, traffic/{TrafficSystem, IDM, Mobil}
     ├── modes/                    P3  GameMode, FreeDriftMode; P4 HighwayMode
     ├── scoring/                  P3  DriftScorer, ComboMeter; P4 NearMissDetector
     ├── audio/                    P5  AudioManager, EngineSound, Sfx
-    └── ui/                       P3  Hud, Menus, Settings, styles.css
+    ├── ui/                       ✅  Hud (+ input / rumble monitor), TuningPanel;  P3 Menus, Settings
+    └── test/                     ✅  sim.ts: headless Rapier harness driving the real GLB
 ```
 
-Unit tests (Vitest) arrive with the first pure-logic module in Phase 1 (tyre curves, IDM,
-scoring) and live next to the code as `*.test.ts`.
+Unit and scenario tests (Vitest, `npm test`) live next to the code as `*.test.ts`.

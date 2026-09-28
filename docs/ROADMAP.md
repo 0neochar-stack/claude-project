@@ -7,7 +7,7 @@ one phase ahead of code.
 | Phase | Theme | Headline result |
 |---|---|---|
 | 0 | Foundations | Plan, toolchain, and the player car generated in Blender and rendering in the browser ✅ |
-| 1 | Core driving | Drift the car around a test pad on keyboard **and** controller |
+| 1 | Core driving | Drift the car around a test pad on keyboard **and** controller ✅ (needs a hands-on feel pass) |
 | 2 | Look development | The test pad looks like the Blender preview: wet, neon, raining |
 | 3 | Free Drift mode | Open neon city with drift scoring |
 | 4 | Highway mode | Endless highway with traffic and near-miss combos |
@@ -26,18 +26,30 @@ one phase ahead of code.
 
 **Exit:** `npm run dev` shows the car with glowing neon. ✅
 
-## Phase 1: Core driving
+## Phase 1: Core driving ✅
 
-- `core/`: `Game`, fixed-step `Loop` (120 Hz) with render interpolation, `EventBus`, `StateMachine`
-- `assets/AssetLibrary`: loads GLBs and parses the naming contract into a `VehicleRig` (wheels, sockets, collider, extras)
-- `physics/`: Rapier world; `ArcadeVehicle` (suspension rays, tyre curves, `DriftAssist`)
-- `input/`: action layer, `KeyboardDevice`, `GamepadDevice` (deadzones, curves, hot-plug), `Haptics`
-- `camera/ChaseCamera`: speed-based FOV and distance, drift look-ahead, collision push-in
-- Test pad: flat plane with cones and walls; dev `lil-gui` tuning panel
-- Vitest for tyre curve and drift-assist maths
+- [x] `core/`: `Game` composition root, `FixedStepLoop` (120 Hz) with render interpolation
+- [x] `assets/vehicleRig`: parses the GLB naming contract into wheels, sockets, collider hull, extras
+- [x] `input/`: keyboard + Gamepad API behind one `DriveInput`, deadzones and curves, hot-plug, `Haptics`
+      (acceleration, drift slip, collisions, landings; trigger-rumble on supporting pads)
+- [x] `physics/`: Rapier world, collision layers, `ArcadeVehicle`: tyre colliders on the
+      `WHEEL_*` sockets, shape-cast suspension, tyre model, handbrake traction loss, drift-angle
+      assist, counter-steer speed retention, stability assist, reverse, air control
+- [x] `camera/ChaseCamera`: chase / far / hood, rotational and speed lag, FOV kick, look-around, shake
+- [x] `world/TestTrack`: neon grid pad, walls, kicker, jump + landing, table-top, drift pylons, cone slalom
+- [x] HUD with a live input and rumble monitor; `?tune` live tuning panel
+- [x] Vitest: 32 tests, including 12 headless driving scenarios on the real GLB
+- Moved: `EventBus` / `StateMachine` to Phase 3 (first needed by game modes); `AssetLibrary`
+  caching and KTX2 to Phase 2; camera collision push-in to Phase 3 (the city has walls to hit)
 
 **Exit:** a figure-eight drift around two cones is repeatable on keyboard and on an Xbox/PS
 controller, and rumble tracks slip. Stable 60 fps. No tunnelling through walls at 250 km/h.
+
+Verified automatically: drift entry, hold, exit and speed retention in headless scenarios.
+In headless Chromium, keyboard and a mocked Xbox pad both drive, drift and cycle cameras,
+and the rumble effects the game sends track acceleration, slip and impacts. A 100 km/h
+wall hit neither tunnels nor clips. Still needs a person: the feel on a real controller,
+the frame rate on a real GPU (CI only has software rendering), and a 250 km/h wall hit.
 
 ## Phase 2: Look development
 
