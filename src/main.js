@@ -88,6 +88,7 @@ let shake = 0;
 let flash = 0;
 let nextLightning = 12 + Math.random() * 20;
 let clock = 0;
+let rumbleTimer = 0;
 
 try { assistIndex = Math.min(2, Math.max(0, Number(localStorage.getItem('cd.assist') ?? 1))); } catch { /* storage blocked */ }
 try { carView.setPaint(Number(localStorage.getItem('cd.paint') ?? 0)); } catch { /* storage blocked */ }
@@ -264,6 +265,7 @@ function setPlaying(on) {
 
 function handleAction(a) {
   if (a === 'help') { setPlaying(!playing); return; }
+  if (a === 'confirm') { if (!playing) setPlaying(true); return; }
   if (!playing) return;
   if (a === 'shiftUp') { car.shift(1); if (car.autoGear) toast('Manual gearbox'); car.autoGear = false; }
   if (a === 'shiftDown') { car.shift(-1); if (car.autoGear) toast('Manual gearbox'); car.autoGear = false; }
@@ -290,7 +292,7 @@ function updateCamera(dt) {
   const carPos = new THREE.Vector3(car.x, 0, car.z);
   if (!playing && !started) {
     // Attract mode: slow orbit around the parked car.
-    const a = clock * 0.18;
+    const a = clock * 0.18 + (window.__cdOrbit || 0);
     camera.position.set(car.x + Math.sin(a) * 9, 2.2, car.z + Math.cos(a) * 9);
     camera.lookAt(car.x, 0.9, car.z);
     camera.fov = 50;
@@ -391,6 +393,13 @@ function frame(now) {
     if (impact > 3) {
       sound.crash(impact);
       shake = Math.min(0.6, impact * 0.05);
+      input.rumble(Math.min(1, impact * 0.12), 0.6, 220);
+    }
+    // Light tyre buzz through the controller while sideways.
+    rumbleTimer -= dt;
+    if (score.angle > 0 && rumbleTimer <= 0) {
+      input.rumble(0, Math.min(0.5, 0.12 + score.angle / 180), 120);
+      rumbleTimer = 0.1;
     }
     score.update(dt, car, impact);
     for (const e of score.takeEvents()) {
@@ -426,7 +435,21 @@ function frame(now) {
   }
 }
 
-window.__cd = { car, score }; // handy from the console
+carView.onBackfire = () => sound.pop();
+input.onPadStatus = (status, id = '') => {
+  const name = id.replace(/\s*\(.*$/, '').slice(0, 40) || 'Controller';
+  const line = $('pad-status');
+  if (status === 'connected') {
+    line.textContent = `${name} connected · press A to drive`;
+    toast(`${name} connected`);
+  } else if (status === 'disconnected') {
+    line.textContent = 'Controller disconnected';
+    toast('Controller disconnected');
+  } else {
+    line.textContent = 'This view blocks controllers. Open the game in its own browser tab to use one.';
+  }
+};
+window.__cd = { car, score, input }; // handy from the console
 $('boot').remove();
 menu.hidden = false;
 syncOptions();

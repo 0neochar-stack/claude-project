@@ -93,6 +93,9 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .options .btn[aria-pressed="true"] { border-color: var(--magenta); color: var(--magenta); }
 .go { justify-self: start; font: italic 700 20px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--night); background: var(--cyan); border: 0; border-radius: 4px; padding: 14px 26px; cursor: pointer; box-shadow: 0 0 26px rgba(51, 240, 255, 0.45); }
 .go:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.pad-help { display: grid; gap: 6px; }
+.pad-help .label { line-height: 1.5; letter-spacing: 0.12em; }
+.pad-help__status { color: var(--cyan); }
 .boot { position: fixed; inset: 0; display: grid; place-items: center; font: 500 12px var(--mono); letter-spacing: 0.3em; color: var(--cyan); }
 
 /* Touch controls */
@@ -188,7 +191,10 @@ body.is-touch .chain__points { font-size: 38px; }
       <button class="btn" type="button" id="opt-paint">Paint: Midnight Violet</button>
     </div>
     <button class="go" type="button" id="go">Drive</button>
-    <div class="label">Gamepad: RT gas · LT brake · A handbrake · LB/RB shift</div>
+    <div class="pad-help">
+      <div class="label">Controller: RT gas · LT brake · A or B handbrake · LB/RB shift · Y camera · Start menu</div>
+      <div class="label pad-help__status" id="pad-status">Plug in a controller and press any button</div>
+    </div>
   </div>
 </div>
 

@@ -112,6 +112,11 @@ export class Sound {
     this.burst({ freq: 2400, type: 'bandpass', q: 2, gain: Math.min(0.5, strength * 0.03), decay: 0.25 });
   }
 
+  pop() {
+    this.burst({ freq: 180, type: 'lowpass', gain: 0.5, attack: 0.002, decay: 0.09 });
+    this.burst({ freq: 1400, type: 'bandpass', q: 1.5, gain: 0.25, attack: 0.002, decay: 0.05 });
+  }
+
   thunder(delay) {
     this.burst({ freq: 110, gain: 0.8, attack: 0.25, decay: 3.5, delay });
   }

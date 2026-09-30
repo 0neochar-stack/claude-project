@@ -17,8 +17,15 @@ export class Input {
     this.touch = { throttle: 0, brake: 0, left: 0, right: 0, handbrake: 0 };
     this.state = { throttle: 0, brake: 0, steer: 0, handbrake: false };
     this.actions = [];
-    this.padPrev = [];
-    this.usingPad = false;
+    this.padState = new Map();
+    this.padBlocked = false;
+    this.lastPad = null;
+    this.onPadStatus = null;
+    addEventListener('gamepadconnected', (e) => this.onPadStatus?.('connected', e.gamepad.id));
+    addEventListener('gamepaddisconnected', (e) => {
+      this.padState.delete(e.gamepad.index);
+      this.onPadStatus?.('disconnected', e.gamepad.id);
+    });
     this.kbSteer = 0;
     addEventListener('keydown', (e) => {
       if (e.code in ACTIONS && !e.repeat) this.actions.push(ACTIONS[e.code]);
@@ -57,28 +64,73 @@ export class Input {
     s.brake = this.held('brake') ? 1 : 0;
     s.handbrake = this.held('handbrake');
 
-    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    this.readPads(s);
+    return s;
+  }
+
+  // Every connected pad is read and merged. Axes only count once they have moved away from where they
+  // rested when first seen, so a phantom device (racing pedals, virtual pads, a headset) with a stuck
+  // axis cannot hold the steering or hide the real controller.
+  readPads(s) {
+    let pads = [];
+    try {
+      pads = navigator.getGamepads ? Array.from(navigator.getGamepads()) : [];
+    } catch {
+      if (!this.padBlocked) { this.padBlocked = true; this.onPadStatus?.('blocked'); }
+      return;
+    }
     for (const pad of pads) {
       if (!pad || !pad.connected) continue;
-      const b = (i) => pad.buttons[i] ? pad.buttons[i].value : 0;
-      let x = pad.axes[0] || 0;
-      x = Math.abs(x) < 0.08 ? 0 : Math.sign(x) * ((Math.abs(x) - 0.08) / 0.92) ** 1.4;
-      const active = Math.abs(x) > 0 || b(7) > 0.05 || b(6) > 0.05;
-      if (active) this.usingPad = true;
-      if (!this.usingPad) continue;
-      if (Math.abs(x) > Math.abs(s.steer)) s.steer = -x;
-      s.throttle = Math.max(s.throttle, b(7));
-      s.brake = Math.max(s.brake, b(6));
-      s.handbrake = s.handbrake || b(0) > 0.5 || b(2) > 0.5;
-      const edges = { 5: 'shiftUp', 4: 'shiftDown', 3: 'camera', 8: 'reset', 9: 'help', 1: 'paint' };
-      for (const [i, act] of Object.entries(edges)) {
-        const pressed = b(+i) > 0.5;
-        if (pressed && !this.padPrev[i]) this.actions.push(act);
-        this.padPrev[i] = pressed;
+      let st = this.padState.get(pad.index);
+      if (!st || st.id !== pad.id) {
+        st = { id: pad.id, rest: pad.axes.slice(), live: new Set(), prev: [] };
+        this.padState.set(pad.index, st);
       }
-      break;
+      pad.axes.forEach((v, i) => { if (Math.abs(v - st.rest[i]) > 0.25) st.live.add(i); });
+      const axis = (i) => (st.live.has(i) ? pad.axes[i] || 0 : 0);
+      const btn = (i) => {
+        const b = pad.buttons[i];
+        if (!b) return 0;
+        return typeof b === 'number' ? b : Math.max(b.value || 0, b.pressed ? 1 : 0);
+      };
+
+      // Left stick with a dead zone and a gentle curve for fine drift angle control.
+      let x = axis(0);
+      const dz = 0.12;
+      x = Math.abs(x) < dz ? 0 : Math.sign(x) * ((Math.abs(x) - dz) / (1 - dz)) ** 1.3;
+      let steer = -x;
+      if (btn(14) > 0.5) steer = 1;
+      if (btn(15) > 0.5) steer = -1;
+
+      let gas = btn(7), brake = btn(6);
+      if (pad.mapping !== 'standard' && pad.axes.length >= 6) {
+        // Many non-standard mappings report triggers as axes 2 and 5, resting at -1.
+        const trig = (i) => (st.live.has(i) ? (st.rest[i] < -0.5 ? (pad.axes[i] + 1) / 2 : Math.max(0, pad.axes[i])) : 0);
+        gas = Math.max(gas, trig(5));
+        brake = Math.max(brake, trig(2));
+      }
+
+      if (Math.abs(steer) > Math.abs(s.steer)) s.steer = steer;
+      s.throttle = Math.max(s.throttle, gas);
+      s.brake = Math.max(s.brake, brake);
+      s.handbrake = s.handbrake || btn(0) > 0.5 || btn(1) > 0.5 || btn(2) > 0.5;
+      if (Math.abs(steer) > 0 || gas > 0.05 || brake > 0.05 || btn(0) > 0.5) this.lastPad = pad;
+
+      const edges = { 0: 'confirm', 9: 'help', 5: 'shiftUp', 4: 'shiftDown', 3: 'camera', 8: 'reset', 12: 'paint', 13: 'assist' };
+      for (const [i, act] of Object.entries(edges)) {
+        const pressed = btn(+i) > 0.5;
+        if (pressed && !st.prev[i]) this.actions.push(act);
+        st.prev[i] = pressed;
+      }
     }
-    return s;
+  }
+
+  rumble(strong, weak, ms) {
+    const act = this.lastPad?.vibrationActuator;
+    if (!act?.playEffect) return;
+    try {
+      act.playEffect('dual-rumble', { duration: ms, strongMagnitude: strong, weakMagnitude: weak }).catch(() => {});
+    } catch { /* rumble unsupported */ }
   }
 
   takeActions() {
