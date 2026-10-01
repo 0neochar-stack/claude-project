@@ -60,7 +60,7 @@ function showCar(id) {
   carView.onBackfire = () => sound.pop();
   scene.add(carView.root);
   car.spec = profile.owns(id) ? profile.spec(id) : buildSpec(id);
-  sound.setVoice(def.voice);
+  sound.setEngine(def.engine);
   carView.update(car, 0);
 }
 showCar(profile.current);
@@ -117,7 +117,9 @@ const hud = {
   total: $('total'), best: $('best'), chain: $('chain'), grade: $('grade'), points: $('points'), mult: $('mult'),
   angle: $('angle'), grace: $('grace'), speed: $('speed'), gear: $('gear'), banner: $('banner'), toast: $('toast'),
   chipGear: $('chip-gear'), chipAssist: $('chip-assist'), credits: $('credits'),
+  boost: $('boost'), boostV: $('boost-value'), boostBar: $('boost-bar'), boostL: $('boost-label'),
 };
+let boostShown = 0;
 const fmt = new Intl.NumberFormat('en-US');
 const last = {};
 function setText(key, el, text) {
@@ -222,6 +224,15 @@ function updateHud() {
     hud.grace.style.transform = `scaleX(${score.graceLeft.toFixed(3)})`;
   }
   setText('speed', hud.speed, String(Math.round(car.speed * 3.6)));
+  // Boost gauge, only for cars with a turbo or supercharger fitted.
+  const forced = car.spec.turboGain > 0 || car.spec.scGain > 0;
+  if (hud.boost.hidden === forced) hud.boost.hidden = !forced;
+  if (forced) {
+    boostShown += (car.boostBar - boostShown) * 0.25;
+    setText('boostV', hud.boostV, `${boostShown.toFixed(2)} bar`);
+    hud.boostBar.style.transform = `scaleX(${Math.min(1, boostShown / 1.2).toFixed(3)})`;
+    setText('boostL', hud.boostL, car.spec.turboGain && car.spec.scGain ? 'Twin-charge' : car.spec.turboGain ? 'Turbo' : 'Supercharger');
+  }
   setText('gear', hud.gear, car.gear === -1 ? 'R' : String(car.gear));
   const frac = Math.min(1, car.rpm / TACH.max);
   rpmArc.setAttribute('stroke-dasharray', `${frac.toFixed(3)} 1`);

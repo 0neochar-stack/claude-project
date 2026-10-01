@@ -177,6 +177,26 @@ for (const c of CARS) {
   check('random inputs stay finite and sane', ok && peak < 100, `peak ${(peak * 3.6).toFixed(0)} km/h`);
 }
 
+// Forced induction: the turbo lags then builds big boost, the supercharger is instant, twin-charging has both.
+{
+  const pull = (induction) => {
+    const car = new CarBody(buildSpec('ronin', {}, induction));
+    car.autoGear = false;
+    car.launch(40 / 3.6, 3);
+    const boost = [];
+    let bov = 0;
+    run(car, 4, (t) => ({ ...idle, throttle: t < 3 ? 1 : 0 }), (t, c) => { boost.push(c.boostBar); if (c.bovEvent) bov = c.bovEvent; });
+    return { early: boost[Math.round(0.15 / DT)], late: boost[Math.round(2.5 / DT)], kmh: kmh(car), bov };
+  };
+  const na = pull('na'), tb = pull('turbo'), sc = pull('sc'), twin = pull('twin');
+  check('turbo lags, then builds boost', tb.early < tb.late * 0.5 && tb.late > 0.5, `${tb.early.toFixed(2)} -> ${tb.late.toFixed(2)} bar`);
+  check('supercharger boost is there at once', sc.early > 0.12 && sc.early > tb.early * 5 && sc.late > 0.25, `${sc.early.toFixed(2)} bar at 0.15 s (turbo ${tb.early.toFixed(2)})`);
+  check('twin-charging fills the turbo lag', twin.early > tb.early + 0.1, `${tb.early.toFixed(2)} vs ${twin.early.toFixed(2)} bar early`);
+  check('boost makes it faster', tb.kmh > na.kmh + 3 && sc.kmh > na.kmh + 3 && twin.kmh >= Math.max(tb.kmh, sc.kmh) - 2,
+    `NA ${na.kmh.toFixed(0)}, turbo ${tb.kmh.toFixed(0)}, SC ${sc.kmh.toFixed(0)}, twin ${twin.kmh.toFixed(0)} km/h`);
+  check('lifting off fires the blow-off valve', tb.bov > 0.3 && na.bov === 0, `boost at lift ${tb.bov.toFixed(2)}`);
+}
+
 // Profile: earning, buying and upgrading, saved through storage.
 {
   const mem = new Map();
@@ -190,8 +210,14 @@ for (const c of CARS) {
   const cost = upgradeCost(CARS[1], 'engine', 0);
   check('buys an upgrade', p.buyUpgrade('kaze', 'engine') && p.car('kaze').levels.engine === 1 && p.credits === 5000 - cost, `cost ${cost}`);
   check('upgrade raises torque', p.spec('kaze').torque > buildSpec('kaze').torque, `${buildSpec('kaze').torque} -> ${p.spec('kaze').torque.toFixed(0)} Nm`);
+  check('kits: cannot fit a kit you have not bought', !p.setInduction('kaze', 'sc') && p.car('kaze').induction === 'na', '');
+  p.earn(400000);
+  check('kits: buy a supercharger and it is fitted', p.buyKit('kaze', 'supercharger') && p.car('kaze').induction === 'sc' && p.spec('kaze').scGain > 0, '');
+  check('kits: buying both makes it twin-charged', p.buyKit('kaze', 'turbo') && p.car('kaze').induction === 'twin' && p.spec('kaze').turboGain > 0 && p.spec('kaze').scGain > 0, '');
+  check('kits: can switch back to one', p.setInduction('kaze', 'turbo') && p.spec('kaze').scGain === 0 && p.spec('kaze').turboGain > 0, '');
   const again = new Profile(store);
-  check('profile survives a reload', again.current === 'kaze' && again.credits === p.credits && again.car('kaze').levels.engine === 1, '');
+  check('profile survives a reload', again.current === 'kaze' && again.credits === p.credits && again.car('kaze').levels.engine === 1 && again.car('kaze').induction === 'turbo', '');
+  check('starter car comes twin-charged', new Profile({ getItem: () => null, setItem() {} }).car('ronin').induction === 'twin', '');
 }
 
 if (failures) {

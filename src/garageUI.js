@@ -1,6 +1,6 @@
 // The garage screen: browse cars, buy and select them, buy upgrades, and style the car you own.
 // It only edits the DOM and the profile; main.js swaps the 3D car through the callbacks.
-import { CARS, UPGRADES, MAX_LEVEL, NEONS, RIMS, buildSpec, specStats, upgradeCost } from './garage.js';
+import { CARS, UPGRADES, MAX_LEVEL, NEONS, RIMS, KITS, INDUCTIONS, buildSpec, specStats, upgradeCost, kitCost } from './garage.js';
 import { PAINTS } from './car.js';
 
 const fmt = new Intl.NumberFormat('en-US');
@@ -44,6 +44,20 @@ export class GarageUI {
         const lv = this.profile.car(this.viewing).levels[b.dataset.upgrade] || 0;
         const cost = upgradeCost(CARS.find((c) => c.id === this.viewing), b.dataset.upgrade, lv);
         this.onToast(`Need ${fmt.format(cost - this.profile.credits)} more CR`);
+      }
+      this.render();
+    });
+    this.$('[data-g="induction"]').addEventListener('click', (e) => {
+      const kit = e.target.closest('[data-kit]'), ind = e.target.closest('[data-ind]');
+      const car = CARS.find((c) => c.id === this.viewing);
+      if (kit) {
+        if (this.profile.buyKit(this.viewing, kit.dataset.kit)) {
+          this.onToast(`${KITS.find((k) => k.id === kit.dataset.kit).name} fitted`);
+          this.onChange(this.viewing, 'spec');
+        } else this.onToast(`Need ${fmt.format(kitCost(car, kit.dataset.kit) - this.profile.credits)} more CR`);
+      } else if (ind && this.profile.setInduction(this.viewing, ind.dataset.ind)) {
+        this.onToast(`${INDUCTIONS.find((x) => x.id === ind.dataset.ind).name}`);
+        this.onChange(this.viewing, 'spec');
       }
       this.render();
     });
@@ -116,8 +130,10 @@ export class GarageUI {
     this.$('[data-g="tagline"]').textContent = car.tagline;
 
     const s = specStats(owned ? p.spec(id) : buildSpec(id));
+    const inductionName = INDUCTIONS.find((x) => x.id === (owned ? state.induction : car.stock.induction)).name;
     const rows = [
       ['Power', s.hp / RANGE.hp, `${s.hp} hp`],
+      ['Boost', inductionName === 'Natural' ? 0 : inductionName === 'Twin-charged' ? 1 : 0.55, inductionName],
       ['Weight', LIGHTEST / s.mass, `${fmt.format(s.mass)} kg`],
       ['Grip', s.grip / RANGE.grip, s.grip.toFixed(2)],
       ['Lock', s.lock / RANGE.lock, `${s.lock}°`],
@@ -149,6 +165,20 @@ export class GarageUI {
         return `<div class="gup"><div class="gup__text"><b>${u.name}</b><span>${u.blurb}</span></div><div class="gup__pips" aria-label="Level ${lv} of ${MAX_LEVEL}">${pips}</div>${btn}</div>`;
       }).join('')
       : '<p class="garage__note">Buy this car to tune it.</p>';
+
+    this.$('[data-g="induction"]').innerHTML = owned
+      ? KITS.map((k) => {
+        const has = state.kits[k.id];
+        const cost = kitCost(car, k.id);
+        const btn = has
+          ? '<button type="button" class="btn gup__buy" disabled>Owned</button>'
+          : `<button type="button" class="btn gup__buy${p.credits < cost ? ' is-short' : ''}" data-kit="${k.id}">${fmt.format(cost)} CR</button>`;
+        return `<div class="gup"><div class="gup__text"><b>${k.name}</b><span>${k.blurb}</span></div><div></div>${btn}</div>`;
+      }).join('') + `<div class="ginduct">${INDUCTIONS.map((x) => {
+        const ok = x.needs.every((k) => state.kits[k]);
+        return `<button type="button" class="btn${state.induction === x.id ? ' is-on' : ''}" data-ind="${x.id}" aria-pressed="${state.induction === x.id}" ${ok ? '' : 'disabled'}>${x.name}</button>`;
+      }).join('')}</div>`
+      : '';
 
     const swatches = (key, list, current) => list.map((c, i) => `<button type="button" class="swatch${i === current ? ' is-on' : ''}" data-style="${key}" data-index="${i}" style="--c:${hex(c.color)}" title="${c.name}" aria-label="${c.name}" aria-pressed="${i === current}"></button>`).join('');
     this.$('[data-g="style"]').innerHTML = owned

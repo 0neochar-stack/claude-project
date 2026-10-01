@@ -40,7 +40,19 @@ export const SPEC = {
   drag: 0.4,
   rolling: 10,
   angleBonus: 0,
+  // Forced induction: extra torque at full boost, as a share of the base. 0 = not fitted.
+  turboGain: 0,
+  scGain: 0,
+  spoolRpm: 3300, // where the turbo comes on boost
+  turboLag: 0.55, // seconds to build boost
 };
+
+// Boost multiplier on engine torque. With both fitted (twin-charging) the supercharger fills the bottom end
+// while the turbo spools, then the turbo takes over.
+export function boostMultiplier(s, turbo, sc) {
+  const t = s.turboGain * turbo, c = s.scGain * sc;
+  return 1 + Math.max(t, c) + 0.35 * Math.min(t, c);
+}
 
 const G = 9.81;
 const VREF = 3; // slip denominators never drop below this, so slow-speed slips stay finite
@@ -101,6 +113,7 @@ export class CarBody {
       ax: 0, ay: 0, beta: 0, speed: 0, u: 0, v: 0,
       wheelspin: 0, rearSlip: 0, frontSlip: 0, driveThrottle: 0, braking: 0, handbrake: false,
       wheelSpinAngle: 0, clutch: false, kick: 0, limiterHold: 0,
+      boost: 0, scBoost: 0, boostBar: 0, bovEvent: 0, lastThrottleIn: 0,
       omega: 0, engW: this.spec.idleRpm / RPM, locked: false,
     });
     this.load.fill(0);
@@ -256,9 +269,26 @@ export class CarBody {
     if (rpmNow >= s.redline) this.cut = true;
     else if (rpmNow < s.redline - 250) this.cut = false;
     const effThrottle = this.shiftTimer > 0 || this.cut ? 0 : throttle;
+
+    // Forced induction. The turbo needs exhaust flow (revs and load) and takes time to spool; lifting off
+    // vents it through the blow-off valve. The supercharger is belt driven, so its boost follows rpm at once.
+    {
+      const rpmE = this.engW * RPM;
+      if (s.turboGain > 0) {
+        const flow = smooth(s.spoolRpm * 0.55, s.spoolRpm * 1.35, rpmE) * (0.2 + 0.8 * effThrottle);
+        const target = effThrottle > 0.12 ? flow : 0;
+        const tau = target > this.boost ? s.turboLag : 0.14;
+        this.boost += (target - this.boost) * Math.min(1, dt / tau);
+        if (this.lastThrottleIn > 0.5 && throttle < 0.2 && this.boost > 0.3) this.bovEvent = this.boost;
+      } else this.boost = 0;
+      this.scBoost = s.scGain > 0 ? smooth(0, s.redline * 0.62, rpmE) : 0;
+      this.lastThrottleIn = throttle;
+      this.boostBar = (s.turboGain * this.boost * 1.9 + s.scGain * this.scBoost * effThrottle * 1.6) * (s.turboGain && s.scGain ? 0.8 : 1);
+    }
+    const boostMul = boostMultiplier(s, this.boost, this.scBoost);
     const engineTorque = (w) => {
       const rpm = Math.max(w * RPM, 1);
-      let t = effThrottle * s.torque * torqueCurve(rpm, s.redline);
+      let t = effThrottle * s.torque * torqueCurve(rpm, s.redline) * boostMul;
       t -= s.torque * s.engineBrake * clamp((rpm - s.idleRpm) / (s.redline - s.idleRpm), 0, 1) * (1 - effThrottle);
       if (w < idleW) t += (idleW - w) * 8; // idle governor
       return t;

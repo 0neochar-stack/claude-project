@@ -132,6 +132,16 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .gup__pips i.is-on { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
 .gup__buy { min-width: 92px; font-variant-numeric: tabular-nums; }
 .gup__buy:disabled { opacity: 0.5; cursor: default; }
+.ginduct { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+.ginduct .btn.is-on { border-color: var(--magenta); color: var(--magenta); }
+.ginduct .btn:disabled { opacity: 0.35; cursor: default; }
+.boost { position: absolute; right: 16px; bottom: calc(212px + env(safe-area-inset-bottom, 0px)); width: 190px; display: grid; gap: 4px; }
+.boost[hidden] { display: none; }
+.boost__row { display: flex; justify-content: space-between; align-items: baseline; }
+.boost__value { font: 700 15px/1 var(--mono); color: var(--cyan); font-variant-numeric: tabular-nums; }
+.boost__bar { height: 5px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden; }
+.boost__bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--magenta)); transform-origin: left; transform: scaleX(0); }
+body.is-touch .boost { top: calc(206px + env(safe-area-inset-top, 0px)); bottom: auto; width: 130px; }
 .garage__note { margin: 0; color: var(--ink-dim); font-size: 13px; }
 .gstyle { display: grid; gap: 6px; }
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -197,6 +207,11 @@ body.is-touch .chain__points { font-size: 38px; }
     </div>
   </div>
 
+  <div class="boost" id="boost" hidden>
+    <div class="boost__row"><span class="label" id="boost-label">Boost</span><span class="boost__value" id="boost-value">0.0 bar</span></div>
+    <div class="boost__bar"><i id="boost-bar"></i></div>
+  </div>
+
   <div class="map"><canvas id="minimap" width="336" height="336"></canvas></div>
 
   <div class="corner">
@@ -260,6 +275,7 @@ body.is-touch .chain__points { font-size: 38px; }
     <div class="garage__stats" data-g="stats"></div>
     <button class="go garage__action" type="button" data-g="action">Drive this car</button>
     <div class="garage__section"><h3 class="label">Upgrades</h3><div data-g="upgrades"></div></div>
+    <div class="garage__section"><h3 class="label">Turbo and supercharger</h3><div data-g="induction"></div></div>
     <div class="garage__section" data-g="style"></div>
     <button class="btn" type="button" data-g="back">Back</button>
   </div>
