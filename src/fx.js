@@ -126,3 +126,78 @@ export function makeRain(count) {
   rain.layers.set(LAYER_MAIN_ONLY);
   return rain;
 }
+
+// Rubber left on the wet road: a ring buffer of quads that fade out over `life` seconds.
+export class SkidMarks {
+  constructor(count = 2400, life = 30) {
+    this.count = count;
+    this.cursor = 0;
+    this.prev = new Map();
+    const geo = new THREE.BufferGeometry();
+    this.pos = new Float32Array(count * 4 * 3);
+    this.birth = new Float32Array(count * 4).fill(-1e6);
+    this.strength = new Float32Array(count * 4);
+    const idx = new Uint32Array(count * 6);
+    for (let i = 0; i < count; i++) idx.set([i * 4, i * 4 + 2, i * 4 + 1, i * 4 + 1, i * 4 + 2, i * 4 + 3], i * 6);
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('aBirth', new THREE.BufferAttribute(this.birth, 1).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('aStrength', new THREE.BufferAttribute(this.strength, 1).setUsage(THREE.DynamicDrawUsage));
+    this.material = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+      uniforms: { uTime: { value: 0 }, uLife: { value: life } },
+      vertexShader: /* glsl */ `
+        attribute float aBirth; attribute float aStrength;
+        uniform float uTime; uniform float uLife;
+        varying float vA;
+        void main() {
+          float age = (uTime - aBirth) / uLife;
+          vA = aStrength * clamp(1.0 - age, 0.0, 1.0);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        varying float vA;
+        void main() {
+          if (vA < 0.003) discard;
+          gl_FragColor = vec4(0.012, 0.01, 0.016, vA);
+        }`,
+    });
+    this.mesh = new THREE.Mesh(geo, this.material);
+    this.mesh.frustumCulled = false;
+    this.mesh.layers.set(LAYER_MAIN_ONLY);
+    this.mesh.renderOrder = 1;
+  }
+
+  // Call each frame per tyre; strength 0 lifts the pen.
+  mark(key, x, z, strength, time, width = 0.25) {
+    const p = this.prev.get(key);
+    if (strength <= 0) { this.prev.delete(key); return; }
+    if (!p) { this.prev.set(key, { x, z, s: strength }); return; }
+    const dx = x - p.x, dz = z - p.z, len = Math.hypot(dx, dz);
+    if (len < 0.3) return;
+    if (len > 4) { this.prev.set(key, { x, z, s: strength }); return; } // teleported (reset)
+    const nx = (-dz / len) * width * 0.5, nz = (dx / len) * width * 0.5;
+    const i = this.cursor;
+    this.cursor = (this.cursor + 1) % this.count;
+    const y = 0.03;
+    this.pos.set([p.x + nx, y, p.z + nz, p.x - nx, y, p.z - nz, x + nx, y, z + nz, x - nx, y, z - nz], i * 12);
+    this.birth.fill(time, i * 4, i * 4 + 4);
+    this.strength.set([p.s, p.s, strength, strength], i * 4);
+    this.prev.set(key, { x, z, s: strength });
+    this.dirty = true;
+  }
+
+  update(time) {
+    this.material.uniforms.uTime.value = time;
+    if (!this.dirty) return;
+    const g = this.mesh.geometry;
+    g.attributes.position.needsUpdate = true;
+    g.attributes.aBirth.needsUpdate = true;
+    g.attributes.aStrength.needsUpdate = true;
+    this.dirty = false;
+  }
+}

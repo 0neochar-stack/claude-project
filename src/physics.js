@@ -60,7 +60,7 @@ export class CarBody {
       steer: 0, gear: 1, rpm: this.spec.idleRpm, shiftTimer: 0, reverseHold: 0,
       ax: 0, beta: 0, prevBeta: 0, speed: 0, u: 0, v: 0,
       wheelspin: 0, rearSlip: 0, frontSlip: 0, driveThrottle: 0, braking: 0, handbrake: false,
-      wheelSpinAngle: 0,
+      wheelSpinAngle: 0, clutch: false, kick: 0,
     });
   }
 
@@ -124,11 +124,17 @@ export class CarBody {
       else if (wheelRpm < s.shiftDownRpm && this.gear > 1 && (Math.abs(this.beta) < 0.25 || this.gear > 2)) this.shift(-1);
     }
     const shifting = this.shiftTimer > 0;
-    const engineRpm = this.wheelspin > 0.5 ? Math.max(this.rpm, wheelRpm) : Math.max(wheelRpm, s.idleRpm);
+    // Clutch kick: hold the clutch to rev the engine free, release to dump the revs into the rear tyres.
+    const clutch = !!input.clutch && this.gear > 0;
+    if (this.clutch && !clutch) this.kick = clamp((this.rpm - wheelRpm) / (s.redline * 0.45), 0, 1);
+    this.clutch = clutch;
+    this.kick = Math.max(0, this.kick - dt * 2.8);
+    const engineRpm = clutch || this.wheelspin > 0.5 ? Math.max(this.rpm, wheelRpm) : Math.max(wheelRpm, s.idleRpm);
     const limiter = engineRpm >= s.redline;
     const effThrottle = shifting || limiter ? 0 : throttle;
     const dir = this.gear === -1 ? -1 : 1;
-    let drive = dir * s.torque * torqueCurve(engineRpm, s.redline) * effThrottle * ratio * s.finalDrive / s.wheelRadius * 0.85;
+    let drive = clutch ? 0 : dir * s.torque * torqueCurve(engineRpm, s.redline) * effThrottle * ratio * s.finalDrive / s.wheelRadius * 0.85;
+    drive *= 1 + this.kick * 2.5;
 
     // Rear axle: drive, brake and handbrake share one friction ellipse.
     const rearLong = u;
@@ -175,7 +181,8 @@ export class CarBody {
     if (speed < 3) Fv -= v * s.mass * 3 * (1 - speed / 3);
 
     // Drift assist: stop the tail swinging past ~62 degrees and damp yaw while gripping.
-    const betaMax = lerp(1.6, 1.08, this.assist);
+    const baseMax = lerp(1.6, 1.08, this.assist);
+    const betaMax = baseMax + Math.min(s.angleBonus || 0, Math.max(0, 1.3 - baseMax));
     const betaRate = (this.beta - this.prevBeta) / dt;
     this.prevBeta = this.beta;
     if (speed > 4) {
@@ -204,7 +211,9 @@ export class CarBody {
     this.h += this.r * dt;
 
     this.ax = lerp(this.ax, clamp(Fu / s.mass, -12, 12), Math.min(1, dt * 8));
-    const targetRpm = this.wheelspin > 0.5
+    const targetRpm = clutch
+      ? s.idleRpm + (s.redline - s.idleRpm) * 0.97 * throttle
+      : this.wheelspin > 0.5
       ? Math.max(wheelRpm, s.idleRpm + (s.redline - s.idleRpm) * (0.55 + 0.4 * throttle))
       : Math.max(wheelRpm, s.idleRpm + throttle * (shifting ? 900 : 0));
     this.rpm = clamp(lerp(this.rpm, targetRpm, Math.min(1, dt * 10)), s.idleRpm, s.redline + 150);

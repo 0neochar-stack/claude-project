@@ -5,6 +5,7 @@ const KEYS = {
   left: ['KeyA', 'ArrowLeft'],
   right: ['KeyD', 'ArrowRight'],
   handbrake: ['Space'],
+  clutch: ['ShiftLeft', 'ShiftRight'],
 };
 const ACTIONS = {
   KeyE: 'shiftUp', KeyQ: 'shiftDown', KeyC: 'camera', KeyR: 'reset', KeyG: 'gearbox',
@@ -14,8 +15,8 @@ const ACTIONS = {
 export class Input {
   constructor() {
     this.down = new Set();
-    this.touch = { throttle: 0, brake: 0, left: 0, right: 0, handbrake: 0 };
-    this.state = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+    this.touch = { throttle: 0, brake: 0, left: 0, right: 0, handbrake: 0, clutch: 0 };
+    this.state = { throttle: 0, brake: 0, steer: 0, handbrake: false, clutch: false };
     this.actions = [];
     this.padState = new Map();
     this.padBlocked = false;
@@ -60,7 +61,10 @@ export class Input {
     const rate = target === 0 || Math.sign(target) !== Math.sign(this.kbSteer) ? 7 : 3.6;
     this.kbSteer += Math.max(-rate * dt, Math.min(rate * dt, target - this.kbSteer));
     s.steer = this.kbSteer;
-    s.throttle = this.held('throttle') ? 1 : 0;
+    // Keys feed the throttle in over ~0.12 s so a tap can feather the slide instead of slamming full power.
+    this.kbThrottle = Math.max(0, Math.min(1, (this.kbThrottle || 0) + (this.held('throttle') ? 8 : -12) * dt));
+    s.throttle = this.kbThrottle;
+    s.clutch = this.held('clutch');
     s.brake = this.held('brake') ? 1 : 0;
     s.handbrake = this.held('handbrake');
 
@@ -113,7 +117,8 @@ export class Input {
       if (Math.abs(steer) > Math.abs(s.steer)) s.steer = steer;
       s.throttle = Math.max(s.throttle, gas);
       s.brake = Math.max(s.brake, brake);
-      s.handbrake = s.handbrake || btn(0) > 0.5 || btn(1) > 0.5 || btn(2) > 0.5;
+      s.handbrake = s.handbrake || btn(0) > 0.5 || btn(1) > 0.5;
+      s.clutch = s.clutch || btn(2) > 0.5;
       if (Math.abs(steer) > 0 || gas > 0.05 || brake > 0.05 || btn(0) > 0.5) this.lastPad = pad;
 
       const edges = { 0: 'confirm', 9: 'help', 5: 'shiftUp', 4: 'shiftDown', 3: 'camera', 8: 'reset', 12: 'paint', 13: 'assist' };

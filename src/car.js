@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { LAYER_MAIN_ONLY } from './wet.js';
+import { NEONS, RIMS } from './garage.js';
 
 export const PAINTS = [
   { name: 'Midnight Violet', color: 0x3b1a78 },
@@ -213,9 +214,12 @@ function makeWheel(parts, side, front) {
 }
 
 // ---------- the car ----------
-export function buildCar(envMap, radial) {
+// look: { scale: [width, height, length], wing: 'duck' | 'gt' | 'none', paint, neon, rims } (indices into the palettes).
+export function buildCar(envMap, radial, look = {}) {
+  const [sx, sy, sz] = look.scale || [1, 1, 1];
   const root = new THREE.Group();
   const body = new THREE.Group(); // rolls and pitches on the suspension
+  body.scale.set(sx, sy, sz);
   root.add(body);
 
   const paint = new THREE.MeshPhysicalMaterial({
@@ -226,6 +230,7 @@ export function buildCar(envMap, radial) {
   const glass = new THREE.MeshPhysicalMaterial({ color: 0x05060b, metalness: 0.1, roughness: 0.02, clearcoat: 1, envMap, envMapIntensity: 2.2 });
   const chrome = new THREE.MeshStandardMaterial({ color: 0xc8ccd6, metalness: 1, roughness: 0.12, envMap, envMapIntensity: 1.6 });
   const neon = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x22e6ff).multiplyScalar(3) });
+  const neonBase = new THREE.Color(0x22e6ff);
 
   // Body shell.
   const zs = [], rings = [];
@@ -289,10 +294,26 @@ export function buildCar(envMap, radial) {
   }
   body.add(box(1.42, 0.12, 0.3, carbon, 0, 0.32, -2.16));
   for (let k = -2; k <= 2; k++) body.add(box(0.02, 0.1, 0.28, carbon, k * 0.26, 0.26, -2.18));
-  body.add(box(1.78, 0.03, 0.34, carbon, 0, 1.2, -1.98));
-  for (const side of [1, -1]) {
-    body.add(box(0.02, 0.18, 0.4, carbon, side * 0.89, 1.17, -1.99));
-    body.add(rod([side * 0.5, 1.2, -1.92], [side * 0.48, centreTop(-1.95) - 0.02, -1.9], 0.022, carbon));
+  if (look.wing === 'gt') {
+    // Tall swan-neck GT wing with endplates and a neon trailing edge.
+    const wy = 1.42;
+    const plane = box(1.9, 0.05, 0.46, carbon, 0, wy, -2.05);
+    plane.rotation.x = -0.1;
+    body.add(plane);
+    body.add(box(1.84, 0.02, 0.02, neon, 0, wy + 0.01, -2.29));
+    for (const side of [1, -1]) {
+      body.add(box(0.03, 0.34, 0.58, paint, side * 0.96, wy - 0.06, -2.05));
+      body.add(rod([side * 0.42, wy, -2.0], [side * 0.4, centreTop(-2.1) - 0.02, -2.12], 0.026, carbon));
+    }
+  } else if (look.wing !== 'none') {
+    body.add(box(1.78, 0.03, 0.34, carbon, 0, 1.2, -1.98));
+    for (const side of [1, -1]) {
+      body.add(box(0.02, 0.18, 0.4, carbon, side * 0.89, 1.17, -1.99));
+      body.add(rod([side * 0.5, 1.2, -1.92], [side * 0.48, centreTop(-1.95) - 0.02, -1.9], 0.022, carbon));
+    }
+  } else {
+    // Small lip spoiler on the boot.
+    body.add(box(1.5, 0.025, 0.12, carbon, 0, centreTop(-2.18) + 0.02, -2.18));
   }
 
   // Front: intake, slim LED headlights with projector dots.
@@ -350,12 +371,10 @@ export function buildCar(envMap, radial) {
   }
 
   // Underglow: bright strip under the sills plus a coloured pool on the road.
-  const glowColor = new THREE.Color(0xff2bd6);
-  body.add(box(1.4, 0.02, 3.4, new THREE.MeshBasicMaterial({ color: glowColor.clone().multiplyScalar(3) }), 0, 0.2, 0));
-  const pool = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.6, 7).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ map: radial, color: glowColor.clone().multiplyScalar(0.45), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
-  );
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0xff2bd6 });
+  body.add(box(1.4, 0.02, 3.4, glowMat, 0, 0.2, 0));
+  const poolMat = new THREE.MeshBasicMaterial({ map: radial, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(4.6 * sx, 7 * sz).rotateX(-Math.PI / 2), poolMat);
   pool.position.y = 0.035;
   pool.layers.set(LAYER_MAIN_ONLY);
   root.add(pool);
@@ -370,9 +389,10 @@ export function buildCar(envMap, radial) {
   body.add(tailGlow);
 
   // Wheels.
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0x9aa0ad, metalness: 1, roughness: 0.22, envMap, envMapIntensity: 1.4 });
   const parts = buildWheelParts({
     tyre: new THREE.MeshStandardMaterial({ color: 0x0b0b0e, roughness: 0.88 }),
-    rim: new THREE.MeshStandardMaterial({ color: 0x9aa0ad, metalness: 1, roughness: 0.22, envMap, envMapIntensity: 1.4 }),
+    rim: rimMat,
     cap: neon,
     disc: new THREE.MeshStandardMaterial({ color: 0x5a5c63, metalness: 0.9, roughness: 0.4, envMap }),
     caliper: new THREE.MeshStandardMaterial({ color: 0xff2a5a, roughness: 0.4, emissive: 0x40061a }),
@@ -380,7 +400,7 @@ export function buildCar(envMap, radial) {
   const wheels = [];
   for (const [side, z, front] of [[1, FRONT_Z, true], [-1, FRONT_Z, true], [1, REAR_Z, false], [-1, REAR_Z, false]]) {
     const w = makeWheel(parts, side, front);
-    w.pivot.position.set(side * TRACK, WHEEL_R, z);
+    w.pivot.position.set(side * TRACK * sx, WHEEL_R, z * sz);
     w.front = front;
     root.add(w.pivot);
     wheels.push(w);
@@ -389,15 +409,39 @@ export function buildCar(envMap, radial) {
   let paintIndex = 0;
   let flameTime = 0;
   let lastThrottle = 0;
+  let neonIndex = 0, rimIndex = 0;
   const api = {
     root, body, wheels, beam,
+    rearTrack: TRACK * sx, rearZ: REAR_Z * sz,
     onBackfire: null,
     setPaint(i) {
       paintIndex = (i + PAINTS.length) % PAINTS.length;
       paint.color.set(PAINTS[paintIndex].color);
       return PAINTS[paintIndex].name;
     },
+    setNeon(i) {
+      neonIndex = (i + NEONS.length) % NEONS.length;
+      neonBase.set(NEONS[neonIndex].color);
+      neon.color.copy(neonBase).multiplyScalar(3);
+      glowMat.color.copy(neonBase).multiplyScalar(3);
+      poolMat.color.copy(neonBase).multiplyScalar(0.45);
+      return NEONS[neonIndex].name;
+    },
+    setRims(i) {
+      rimIndex = (i + RIMS.length) % RIMS.length;
+      rimMat.color.set(RIMS[rimIndex].color);
+      return RIMS[rimIndex].name;
+    },
     get paintIndex() { return paintIndex; },
+    get neonIndex() { return neonIndex; },
+    get rimIndex() { return rimIndex; },
+    dispose() {
+      root.removeFromParent();
+      root.traverse((o) => {
+        o.geometry?.dispose();
+        for (const m of [].concat(o.material || [])) if (m !== undefined) m.dispose();
+      });
+    },
     update(car, dt) {
       root.position.set(car.x, 0, car.z);
       root.rotation.y = car.h;
@@ -427,5 +471,8 @@ export function buildCar(envMap, radial) {
       if (flame.visible) flame.scale.setScalar(0.7 + Math.random() * 0.6);
     },
   };
+  api.setPaint(look.paint || 0);
+  api.setNeon(look.neon || 0);
+  api.setRims(look.rims || 0);
   return api;
 }

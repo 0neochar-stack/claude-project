@@ -5,6 +5,13 @@ export class Sound {
     this.muted = false;
     this.lastThrottle = 0;
     this.boost = 0;
+    this.voice = { pitch: 1.5, sub: 0.5, bright: 1 };
+  }
+
+  // Engine character per car: firing pitch per rev, square sub-octave weight and filter brightness.
+  setVoice(voice) {
+    this.voice = { ...this.voice, ...voice };
+    if (this.subGain) this.subGain.gain.value = this.voice.sub;
   }
 
   start() {
@@ -33,7 +40,7 @@ export class Sound {
     this.engineOsc = [ctx.createOscillator(), ctx.createOscillator(), ctx.createOscillator()];
     const [o1, o2, o3] = this.engineOsc;
     o1.type = 'sawtooth'; o2.type = 'square'; o3.type = 'sawtooth';
-    const g2 = ctx.createGain(); g2.gain.value = 0.5;
+    const g2 = (this.subGain = ctx.createGain()); g2.gain.value = this.voice.sub;
     const g3 = ctx.createGain(); g3.gain.value = 0.18;
     const shaper = ctx.createWaveShaper();
     const curve = new Float32Array(1024);
@@ -130,12 +137,12 @@ export class Sound {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const rpm = car.rpm;
-    const f = (rpm / 60) * 1.5;
+    const f = (rpm / 60) * this.voice.pitch;
     this.engineOsc[0].frequency.setTargetAtTime(f, t, 0.02);
     this.engineOsc[1].frequency.setTargetAtTime(f * 0.5, t, 0.02);
     this.engineOsc[2].frequency.setTargetAtTime(f * 2.01, t, 0.02);
     const th = car.driveThrottle;
-    this.engineFilter.frequency.setTargetAtTime(300 + th * 2400 + rpm * 0.25, t, 0.04);
+    this.engineFilter.frequency.setTargetAtTime((300 + th * 2400 + rpm * 0.25) * this.voice.bright, t, 0.04);
     this.engineGain.gain.setTargetAtTime(0.09 + th * 0.13, t, 0.05);
 
     this.boost += ((th > 0.5 && rpm > 3500 ? 1 : 0) - this.boost) * Math.min(1, dt * 1.6);
