@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BLOCKS, ROADS, HALF, CURB, PILLARS, PLAZA_AREA } from './world.js';
 import { makeWet, LAYER_WET, LAYER_MAIN_ONLY } from './wet.js';
+import { buildCityDetail } from './cityDetail.js';
 
 const SIDEWALK = 4.5;
 const NEON = [0xff2bd6, 0x22e6ff, 0xffa62b, 0x9d5cff, 0x2bffa0, 0xff3355];
@@ -178,6 +179,16 @@ function planBuildings() {
         if (j === 0) faces.push('s');
         if (j === nz - 1) faces.push('n');
         add(x0, x1, z0, z1, h, faces);
+        // Taller towers step back once or twice near the top.
+        let base = list[list.length - 1];
+        for (let k = 0; k < 2 && base.h > 45 && rand() < 0.65; k++) {
+          const inset = Math.min(base.x1 - base.x0, base.z1 - base.z0) * range(0.12, 0.22);
+          const th = base.h * range(0.18, 0.4);
+          base.covered = true;
+          const tier = { x0: base.x0 + inset, x1: base.x1 - inset, z0: base.z0 + inset, z1: base.z1 - inset, h: th, y0: (base.y0 || 0) + base.h, faces: [], tier: true };
+          list.push(tier);
+          base = tier;
+        }
       }
     }
   }
@@ -200,7 +211,10 @@ function planBuildings() {
 function makeBuildings(group, plan) {
   const geo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75, metalness: 0.15 });
+  const timeU = { value: 0 };
+  mat.userData.time = timeU;
   mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uBTime = timeU;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vBPos; varying vec3 vBNorm; varying float vBSeed;')
       .replace('#include <project_vertex>', `#include <project_vertex>
@@ -214,7 +228,7 @@ function makeBuildings(group, plan) {
       vBSeed = fract(bm[3].x * 0.137 + bm[3].z * 0.719);`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-      varying vec3 vBPos; varying vec3 vBNorm; varying float vBSeed;
+      varying vec3 vBPos; varying vec3 vBNorm; varying float vBSeed; uniform float uBTime;
       float bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       vec3 bn = normalize(vBNorm);
@@ -225,11 +239,24 @@ function makeBuildings(group, plan) {
         vec2 cell = floor(fp / sz);
         vec2 f = fract(fp / sz);
         float win = step(0.15, f.x) * step(f.x, 0.85) * step(0.2, f.y) * step(f.y, 0.8) * step(5.0, vBPos.y);
+        // Window frame, a mullion down the middle, and a ledge along each floor.
+        float frame = (step(0.12, f.x) * step(f.x, 0.88) * step(0.17, f.y) * step(f.y, 0.83) - win) * step(5.0, vBPos.y);
+        float mull = win * (1.0 - step(0.025, abs(f.x - 0.5)));
+        float ledge = step(0.0, f.y) * step(f.y, 0.07) * step(5.0, vBPos.y);
+        float pier = step(0.97, fract(fp.x / (sz.x * 4.0))) * step(5.0, vBPos.y);
         float hh = bHash(cell + floor(vBSeed * 97.0));
         float lit = step(0.68 - vBSeed * 0.2, hh);
         vec3 wc = hh > 0.95 ? vec3(1.0, 0.3, 0.85) : (hh > 0.83 ? vec3(0.45, 0.78, 1.0) : vec3(1.0, 0.64, 0.34));
+        // Interior depth: lit rooms fall off toward the window edges; some have blinds, a few flicker like a TV.
+        vec2 inw = clamp((f - vec2(0.15, 0.2)) / vec2(0.7, 0.6), 0.0, 1.0);
+        float depth = 0.55 + 0.45 * smoothstep(0.0, 0.35, min(min(inw.x, 1.0 - inw.x), min(inw.y, 1.0 - inw.y)));
+        float h2 = bHash(cell + 17.1);
+        float blinds = h2 > 0.6 ? 0.65 + 0.35 * step(0.5, fract(inw.y * 9.0)) : 1.0;
+        float tv = h2 > 0.965 ? 0.5 + 0.5 * sin(uBTime * (6.0 + h2 * 20.0) + hh * 40.0) * sin(uBTime * 1.7 + h2 * 9.0) : 1.0;
+        vec3 tvTint = h2 > 0.965 ? vec3(0.45, 0.6, 1.0) : vec3(1.0);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.01, 0.015, 0.03), win);
-        totalEmissiveRadiance += win * lit * wc * (0.12 + 0.6 * bHash(cell + 5.3));
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.9 + 0.02, frame + ledge * 0.8 + pier * 0.6);
+        totalEmissiveRadiance += win * (1.0 - mull) * lit * wc * tvTint * depth * blinds * tv * (0.12 + 0.6 * bHash(cell + 5.3));
         if (vBPos.y < 4.4) {
           float shop = floor(along / 6.5);
           float hs = bHash(vec2(shop, floor(vBSeed * 53.0)));
@@ -247,7 +274,7 @@ function makeBuildings(group, plan) {
   const m = new THREE.Matrix4();
   const c = new THREE.Color();
   plan.forEach((b, i) => {
-    m.makeScale(b.x1 - b.x0, b.h, b.z1 - b.z0).setPosition((b.x0 + b.x1) / 2, CURB, (b.z0 + b.z1) / 2);
+    m.makeScale(b.x1 - b.x0, b.h, b.z1 - b.z0).setPosition((b.x0 + b.x1) / 2, CURB + (b.y0 || 0), (b.z0 + b.z1) / 2);
     mesh.setMatrixAt(i, m);
     c.setHSL(range(0.62, 0.75), range(0.1, 0.25), range(0.05, 0.11));
     mesh.setColorAt(i, c);
@@ -258,7 +285,7 @@ function makeBuildings(group, plan) {
   const trims = [];
   for (const b of plan) {
     const color = new THREE.Color(pick(NEON)).multiplyScalar(range(2, 3.4));
-    const top = CURB + b.h;
+    const top = CURB + (b.y0 || 0) + b.h;
     if (rand() < 0.45) {
       const w = b.x1 - b.x0, d = b.z1 - b.z0;
       trims.push({ x: (b.x0 + b.x1) / 2, y: top, z: b.z0, sx: w, sy: 0.35, sz: 0.35, color });
@@ -268,7 +295,7 @@ function makeBuildings(group, plan) {
     }
     if (rand() < 0.3) {
       const cx = rand() < 0.5 ? b.x0 : b.x1, cz = rand() < 0.5 ? b.z0 : b.z1;
-      trims.push({ x: cx, y: CURB + 5 + (b.h - 5) / 2, z: cz, sx: 0.3, sy: b.h - 5, sz: 0.3, color });
+      trims.push({ x: cx, y: CURB + (b.y0 || 0) + 5 + (b.h - 5) / 2, z: cz, sx: 0.3, sy: b.h - 5, sz: 0.3, color });
     }
   }
   const trimMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial(), trims.length);
@@ -278,6 +305,7 @@ function makeBuildings(group, plan) {
     trimMesh.setColorAt(i, t.color);
   });
   group.add(trimMesh);
+  return mat;
 }
 
 // ---------- neon signs ----------
@@ -481,15 +509,19 @@ export function buildCity(scene, refl) {
   scene.add(sky);
   makeGround(group, refl);
   const plan = planBuildings();
-  makeBuildings(group, plan);
+  const buildingMat = makeBuildings(group, plan);
   const signMat = makeSigns(group, plan);
   makeLamps(group, radialTexture());
   makePylons(group);
+  const detail = buildCityDetail(group, plan, rand);
   scene.add(group);
   return {
     sky,
     radial: radialTexture(),
+    steam: detail.steam,
     update(t, camera, flash) {
+      buildingMat.userData.time.value = t;
+      detail.update(t);
       sky.position.copy(camera.position);
       sky.material.uniforms.uTime.value = t;
       sky.material.uniforms.uFlash.value = flash;

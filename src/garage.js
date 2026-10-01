@@ -11,7 +11,7 @@ export const CARS = [
     price: 0,
     tier: 1,
     spec: {},
-    look: { scale: [1, 1, 1], wing: 'duck', paint: 0, neon: 0, rims: 0 },
+    look: { scale: [1, 1, 1], wing: 'duck', paint: 0, neon: 0, rims: 0, wheels: 'six', exhaust: 'single', decal: 'Ronin', plate: '20-26', cage: 'accent' },
     voice: { pitch: 1.5, sub: 0.5, bright: 1 },
   },
   {
@@ -24,7 +24,7 @@ export const CARS = [
       mass: 1060, inertia: 1320, a: 1.15, b: 1.3, torque: 300, redline: 8600, shiftUpRpm: 8100, shiftDownRpm: 3600,
       gears: [3.6, 2.4, 1.78, 1.38, 1.1, 0.9], finalDrive: 4.1, muLat: 1.06, maxSteer: 0.88,
     },
-    look: { scale: [0.93, 0.95, 0.92], wing: 'none', paint: 3, neon: 1, rims: 1 },
+    look: { scale: [0.93, 0.95, 0.92], wing: 'none', paint: 3, neon: 1, rims: 1, wheels: 'mesh', exhaust: 'center', decal: 'Kaze', plate: '86-86', cage: 'accent' },
     voice: { pitch: 2.0, sub: 0.3, bright: 1.3 },
   },
   {
@@ -37,7 +37,7 @@ export const CARS = [
       mass: 1520, inertia: 2150, a: 1.28, b: 1.4, torque: 590, redline: 7000, shiftUpRpm: 6600, shiftDownRpm: 2600,
       gears: [3.0, 2.0, 1.48, 1.18, 0.96, 0.8], finalDrive: 3.5, muLat: 1.1, muLong: 1.22, drag: 0.43,
     },
-    look: { scale: [1.07, 1.03, 1.06], wing: 'gt', paint: 6, neon: 2, rims: 2 },
+    look: { scale: [1.07, 1.03, 1.06], wing: 'gt', paint: 6, neon: 2, rims: 2, wheels: 'dish', exhaust: 'quad', decal: 'Oni V8', plate: '66-66', cage: 'paint' },
     voice: { pitch: 1.0, sub: 0.9, bright: 0.75 },
   },
   {
@@ -50,7 +50,7 @@ export const CARS = [
       mass: 1360, inertia: 1820, a: 1.22, b: 1.36, torque: 590, redline: 8400, shiftUpRpm: 7900, shiftDownRpm: 3300,
       gears: [3.2, 2.15, 1.6, 1.27, 1.03, 0.85], finalDrive: 3.8, muLat: 1.16, muLong: 1.3, drag: 0.37, maxSteer: 0.86,
     },
-    look: { scale: [1.04, 0.96, 1.08], wing: 'gt', paint: 1, neon: 3, rims: 3 },
+    look: { scale: [1.04, 0.96, 1.08], wing: 'gt', paint: 1, neon: 3, rims: 3, wheels: 'five', exhaust: 'dual', decal: 'Ryujin', plate: '32-32', cage: 'accent' },
     voice: { pitch: 1.75, sub: 0.45, bright: 1.15 },
   },
 ];

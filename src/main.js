@@ -449,6 +449,18 @@ function emitEffects(dt) {
   }
 }
 
+// Steam drifting up out of the manholes near the camera.
+let steamAcc = 0;
+function emitSteam(dt) {
+  steamAcc += dt * 9;
+  while (steamAcc >= 1) {
+    steamAcc -= 1;
+    const v = city.steam[Math.floor(Math.random() * city.steam.length)];
+    if (!v || Math.hypot(v.x - camera.position.x, v.z - camera.position.z) > 70) continue;
+    particles.emit(v.x + (Math.random() - 0.5) * 0.6, 0.1, v.z + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.4, 1.1 + Math.random() * 0.6, (Math.random() - 0.5) * 0.4, 0.8, 1.6, 2.5 + Math.random(), 0.16);
+  }
+}
+
 function updateWeather(dt) {
   nextLightning -= dt;
   if (nextLightning <= 0) {
@@ -516,6 +528,7 @@ function frame(now) {
   }
 
   carView.update(car, dt);
+  emitSteam(dt);
   particles.update(dt);
   skids.update(clock);
   updateCamera(dt);
@@ -552,7 +565,7 @@ input.onPadStatus = (status, id = '') => {
     line.textContent = 'This view blocks controllers. Open the game in its own browser tab to use one.';
   }
 };
-window.__cd = { car, score, input, profile, garage, skids }; // handy from the console
+window.__cd = { car, score, input, profile, garage, skids, renderer, scene }; // handy from the console
 $('boot').remove();
 menu.hidden = false;
 syncOptions();
