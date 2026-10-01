@@ -22,7 +22,7 @@ export const CARS = [
     tier: 0.8,
     spec: {
       mass: 1060, inertia: 1320, a: 1.15, b: 1.3, torque: 300, redline: 8600, shiftUpRpm: 8100, shiftDownRpm: 3600,
-      gears: [3.6, 2.4, 1.78, 1.38, 1.1, 0.9], finalDrive: 4.1, muLat: 1.06, maxSteer: 0.66,
+      gears: [3.6, 2.4, 1.78, 1.38, 1.1, 0.9], finalDrive: 4.1, muLat: 1.06, maxSteer: 0.88,
     },
     look: { scale: [0.93, 0.95, 0.92], wing: 'none', paint: 3, neon: 1, rims: 1 },
     voice: { pitch: 2.0, sub: 0.3, bright: 1.3 },
@@ -48,7 +48,7 @@ export const CARS = [
     tier: 2.5,
     spec: {
       mass: 1360, inertia: 1820, a: 1.22, b: 1.36, torque: 590, redline: 8400, shiftUpRpm: 7900, shiftDownRpm: 3300,
-      gears: [3.2, 2.15, 1.6, 1.27, 1.03, 0.85], finalDrive: 3.8, muLat: 1.16, muLong: 1.3, drag: 0.37, maxSteer: 0.65,
+      gears: [3.2, 2.15, 1.6, 1.27, 1.03, 0.85], finalDrive: 3.8, muLat: 1.16, muLong: 1.3, drag: 0.37, maxSteer: 0.86,
     },
     look: { scale: [1.04, 0.96, 1.08], wing: 'gt', paint: 1, neon: 3, rims: 3 },
     voice: { pitch: 1.75, sub: 0.45, bright: 1.15 },

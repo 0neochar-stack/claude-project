@@ -65,7 +65,7 @@ function showCar(id) {
 }
 showCar(profile.current);
 
-const particles = new Particles(isTouch ? 400 : 800);
+const particles = new Particles(isTouch ? 900 : 2000);
 scene.add(particles.points);
 const rain = makeRain(isTouch ? 4500 : 10000);
 scene.add(rain);
@@ -96,8 +96,8 @@ resize();
 const input = new Input();
 input.bindTouch($('touch'));
 const score = new DriftScore();
-const ASSISTS = [['Low', 0.35], ['Medium', 0.75], ['High', 1]];
-let assistIndex = 1;
+const ASSISTS = [['Off', 0], ['Low', 0.35], ['Medium', 0.75], ['High', 1]];
+let assistIndex = 2;
 car.assist = ASSISTS[assistIndex][1];
 let cameraMode = 0;
 const CAMERAS = ['Chase', 'Far chase', 'Bumper'];
@@ -109,7 +109,7 @@ let nextLightning = 12 + Math.random() * 20;
 let clock = 0;
 let rumbleTimer = 0;
 
-try { assistIndex = Math.min(2, Math.max(0, Number(localStorage.getItem('cd.assist') ?? 1))); } catch { /* storage blocked */ }
+try { assistIndex = Math.min(3, Math.max(0, Number(localStorage.getItem('cd.assist2') ?? 2))); } catch { /* storage blocked */ }
 car.assist = ASSISTS[assistIndex][1];
 
 // ---------- HUD ----------
@@ -241,7 +241,7 @@ function syncOptions() {
 function cycleAssist() {
   assistIndex = (assistIndex + 1) % ASSISTS.length;
   car.assist = ASSISTS[assistIndex][1];
-  try { localStorage.setItem('cd.assist', String(assistIndex)); } catch { /* storage blocked */ }
+  try { localStorage.setItem('cd.assist2', String(assistIndex)); } catch { /* storage blocked */ }
   syncOptions();
   return `Drift assist ${ASSISTS[assistIndex][0]}`;
 }
@@ -424,16 +424,23 @@ function updateCamera(dt) {
 
 // ---------- effects ----------
 const tmp = new THREE.Vector3();
+const smokeAcc = [0, 0];
 function emitEffects(dt) {
   const sh = Math.sin(car.h), ch = Math.cos(car.h);
-  const slip = Math.max(0, Math.min(1, (car.rearSlip - 3) / 7)) * Math.min(1, car.speed / 5);
   const track = carView.rearTrack, back = -carView.rearZ;
   for (const side of [-1, 1]) {
+    // Each rear tyre smokes and marks from its own sliding speed (index 2 is rear left, 3 rear right).
+    const slip = Math.max(0, Math.min(1, (car.slip[side > 0 ? 2 : 3] - 2) / 9)) * Math.min(1, car.speed / 4);
     const wx = car.x + ch * side * track - sh * back;
     const wz = car.z - sh * side * track - ch * back;
-    skids.mark(side, wx, wz, slip > 0.12 ? 0.25 + slip * 0.4 : 0, clock);
-    if (slip > 0 && Math.random() < slip * dt * 45) {
-      particles.emit(wx, 0.35, wz, car.vx * 0.25 + (Math.random() - 0.5) * 2, 0.6, car.vz * 0.25 + (Math.random() - 0.5) * 2, 0.9, 2.4, 1.5 + Math.random(), 0.36);
+    skids.mark(side, wx, wz, slip > 0.08 ? 0.22 + slip * 0.45 : 0, clock);
+    // Thick billowing smoke: up to ~80 puffs a second per tyre, carried along with the car a little.
+    smokeAcc[side > 0 ? 1 : 0] += slip * slip * dt * 80;
+    while (smokeAcc[side > 0 ? 1 : 0] >= 1) {
+      smokeAcc[side > 0 ? 1 : 0] -= 1;
+      const j = Math.random();
+      particles.emit(wx - sh * j * 0.4, 0.3, wz - ch * j * 0.4, car.vx * 0.3 + (Math.random() - 0.5) * 2.4, 0.4 + Math.random() * 0.6,
+        car.vz * 0.3 + (Math.random() - 0.5) * 2.4, 1.0 + Math.random() * 0.4, 2.6, 2.2 + Math.random() * 1.4, 0.3);
     }
     // Wet road spray behind the tyres.
     if (car.speed > 10 && Math.random() < Math.min(1, car.speed / 40) * dt * 40) {

@@ -58,7 +58,7 @@ export class Input {
     const left = this.held('left'), right = this.held('right');
     const target = (left ? 1 : 0) - (right ? 1 : 0);
     // Digital steering ramps in, and snaps back faster, so taps can feather a drift.
-    const rate = target === 0 || Math.sign(target) !== Math.sign(this.kbSteer) ? 7 : 3.6;
+    const rate = target === 0 || Math.sign(target) !== Math.sign(this.kbSteer) ? 9 : 5;
     this.kbSteer += Math.max(-rate * dt, Math.min(rate * dt, target - this.kbSteer));
     s.steer = this.kbSteer;
     // Keys feed the throttle in over ~0.12 s so a tap can feather the slide instead of slamming full power.

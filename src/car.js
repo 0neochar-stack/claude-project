@@ -410,6 +410,7 @@ export function buildCar(envMap, radial, look = {}) {
   let flameTime = 0;
   let lastThrottle = 0;
   let neonIndex = 0, rimIndex = 0;
+  const roll = { x: 0, v: 0 }, pitch = { x: 0, v: 0 };
   const api = {
     root, body, wheels, beam,
     rearTrack: TRACK * sx, rearZ: REAR_Z * sz,
@@ -446,9 +447,13 @@ export function buildCar(envMap, radial, look = {}) {
       root.position.set(car.x, 0, car.z);
       root.rotation.y = car.h;
       // Body roll from lateral load, pitch from acceleration.
-      const lat = car.r * car.u;
-      body.rotation.z = THREE.MathUtils.damp(body.rotation.z, THREE.MathUtils.clamp(lat * 0.006, -0.07, 0.07), 8, dt);
-      body.rotation.x = THREE.MathUtils.damp(body.rotation.x, THREE.MathUtils.clamp(-car.ax * 0.006, -0.05, 0.05), 8, dt);
+      // Roll and pitch from the same load transfer the tyres feel, on a slightly bouncy spring.
+      roll.v += (THREE.MathUtils.clamp(car.ay * 0.0075, -0.075, 0.075) - roll.x) * 90 * dt - roll.v * 11 * dt;
+      roll.x += roll.v * dt;
+      pitch.v += (THREE.MathUtils.clamp(-car.ax * 0.0065, -0.05, 0.05) - pitch.x) * 90 * dt - pitch.v * 11 * dt;
+      pitch.x += pitch.v * dt;
+      body.rotation.z = roll.x;
+      body.rotation.x = pitch.x;
       for (const w of wheels) {
         if (w.front) {
           w.pivot.rotation.y = car.steer;
