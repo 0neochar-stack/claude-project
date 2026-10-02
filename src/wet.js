@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ROADS } from './world.js';
 
 // Layers: 0 = reflected scene, 1 = main-view only (rain, decals), 3 = wet ground (samples the reflection).
 export const LAYER_MAIN_ONLY = 1;
@@ -75,10 +76,14 @@ export class WetReflections {
 
 // Turns a MeshStandardMaterial into wet ground: darker, glossier, rain-rippled puddles that mirror the city.
 // wet: overall sheen on dry-ish asphalt; puddle: how much of the surface is standing water; grain: asphalt mottling.
-export function makeWet(material, reflections, { wet = 1, puddle = 1, grain = 1 } = {}) {
+// road: asphalt detail (wheel tracks, cracks, repair patches, oil stains). tiles: paving slabs and tactile strips.
+export function makeWet(material, reflections, { wet = 1, puddle = 1, grain = 1, road = false, tiles = false } = {}) {
+  if (road) material.defines = { ...material.defines, WET_ROAD: '' };
+  if (tiles) material.defines = { ...material.defines, WET_TILES: '' };
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, reflections.uniforms, {
       uWet: { value: wet }, uPuddle: { value: puddle }, uGrain: { value: grain },
+      uRoadLo: { value: ROADS.map((r) => r.lo) }, uRoadHi: { value: ROADS.map((r) => r.hi) },
     });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWetPos;')
@@ -87,7 +92,30 @@ export function makeWet(material, reflections, { wet = 1, puddle = 1, grain = 1 
       .replace('#include <common>', `#include <common>
 uniform sampler2D tReflect; uniform mat4 reflectMatrix;
 uniform float uTime, uRain, uWet, uPuddle, uGrain;
+uniform float uRoadLo[${ROADS.length}], uRoadHi[${ROADS.length}];
 varying vec3 vWetPos;
+// Street lamps stand on a fixed pattern: both sides of every road, 12 m in from each block end and mid-block,
+// with the head reaching ~2.8 m out over the road at 7.4 m. Light from the nearest ones, 1 right under a head.
+float lampLight(vec2 wp) {
+  float L = 0.0;
+  for (int i = 0; i < ${ROADS.length}; i++) {
+    float c = (uRoadLo[i] + uRoadHi[i]) * 0.5, hw = (uRoadHi[i] - uRoadLo[i]) * 0.5;
+    for (int axis = 0; axis < 2; axis++) {
+      float lat = (axis == 0 ? wp.x : wp.y) - c;
+      if (abs(lat) > hw + 8.0) continue;
+      float s = axis == 0 ? wp.y : wp.x;
+      float ds = 1e5;
+      for (int k = 0; k < ${ROADS.length - 1}; k++) {
+        float bl = uRoadHi[k], bh = uRoadLo[k + 1];
+        ds = min(ds, min(min(abs(s - bl - 12.0), abs(s - (bl + bh) * 0.5)), abs(s - bh + 12.0)));
+      }
+      float dl = min(abs(lat - (hw - 1.9)), abs(lat + (hw - 1.9)));
+      float d2 = ds * ds + dl * dl;
+      L += 405.0 / pow(d2 + 54.8, 1.5);
+    }
+  }
+  return min(L, 1.2);
+}
 ${NOISE}
 vec2 rainRipples(vec2 p, float t) {
   vec2 acc = vec2(0.0);
@@ -110,9 +138,77 @@ vec2 rainRipples(vec2 p, float t) {
 float wetPud = smoothstep(0.5, 0.6, wFbm(vWetPos.xz * 0.075) + 0.12 * wFbm(vWetPos.xz * 0.9)) * uPuddle;
 float wetGrain = wFbm(vWetPos.xz * 0.45);
 diffuseColor.rgb *= mix(1.0, 0.7 + 0.55 * wetGrain, uGrain);
-diffuseColor.rgb *= mix(1.0, 0.45, max(wetPud, uWet * 0.45));`)
+diffuseColor.rgb *= mix(1.0, 0.45, max(wetPud, uWet * 0.45));
+float roadPolish = 0.0, roadDull = 0.0;
+#ifdef WET_ROAD
+{
+  vec2 wp = vWetPos.xz;
+  float wpx = max(fwidth(wp.x), fwidth(wp.y));
+  // Which road am I on, and how far across it?
+  float offX = 1e5, wX = 0.0, offZ = 1e5, wZ = 0.0;
+  for (int i = 0; i < ${ROADS.length}; i++) {
+    float c = (uRoadLo[i] + uRoadHi[i]) * 0.5, w = uRoadHi[i] - uRoadLo[i];
+    if (abs(wp.x - c) < abs(offX)) { offX = wp.x - c; wX = w; }
+    if (abs(wp.y - c) < abs(offZ)) { offZ = wp.y - c; wZ = w; }
+  }
+  bool inX = abs(offX) < wX * 0.5, inZ = abs(offZ) < wZ * 0.5;
+  bool useX = inX && (!inZ || abs(offX) < abs(offZ));
+  float lat = useX ? offX : offZ, rw = useX ? wX : wZ;
+  float onRoad = (inX || inZ) ? 1.0 : 0.0;
+  // Polished wheel tracks, two per lane.
+  float laneW = rw / (rw >= 26.0 ? 4.0 : 2.0);
+  float lp = fract((lat + rw * 0.5) / laneW);
+  float track = (smoothstep(0.13, 0.02, abs(lp - 0.28)) + smoothstep(0.13, 0.02, abs(lp - 0.72))) * onRoad * (inX && inZ ? 0.3 : 1.0);
+  // Rectangular repair patches.
+  vec2 pg = wp / vec2(5.0, 3.2);
+  vec2 pf = fract(pg);
+  float patchy = step(0.9, wHash(floor(pg) + 4.1)) * step(0.08, pf.x) * step(pf.x, 0.92) * step(0.12, pf.y) * step(pf.y, 0.88);
+  // Crack networks, only in some areas, faded out where they get smaller than a pixel.
+  vec2 g = wp * 1.3 + (vec2(wFbm(wp * 0.9), wFbm(wp * 0.9 + 5.2)) - 0.5) * 1.2, gi = floor(g), gf = fract(g);
+  float d1 = 8.0, d2 = 8.0;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec2 o = vec2(float(i), float(j));
+    vec2 r = o + vec2(wHash(gi + o), wHash(gi + o + 7.3)) - gf;
+    float d = dot(r, r);
+    if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+  }
+  float edge = sqrt(d2) - sqrt(d1);
+  float crack = (1.0 - smoothstep(0.012, 0.012 + wpx * 1.3, edge)) * smoothstep(0.6, 0.76, wFbm(wp * 0.05)) * (1.0 - smoothstep(0.04, 0.14, wpx));
+  // Oil drips down the middle of each lane.
+  float oil = smoothstep(0.6, 0.82, wFbm(wp * 0.32 + 11.0)) * smoothstep(0.22, 0.0, abs(lp - 0.5)) * onRoad;
+  diffuseColor.rgb *= mix(1.0, 0.78, patchy) * (1.0 - 0.55 * crack) * (1.0 - 0.22 * track) * (1.0 - 0.4 * oil);
+  diffuseColor.rgb += oil * vec3(0.006, 0.0, 0.012); // a faint petrol sheen
+  roadPolish = track * 0.55 + oil * 0.7;
+  roadDull = clamp(crack * 0.9 + patchy * 0.45 + (1.0 - wetPud) * (0.35 - 0.3 * track), 0.0, 0.9);
+}
+#endif
+#ifdef WET_TILES
+{
+  vec2 wp = vWetPos.xz;
+  float tpx = max(fwidth(wp.x), fwidth(wp.y));
+  vec2 tp = wp / 0.6, tf = fract(tp);
+  float jd = min(0.5 - abs(tf.x - 0.5), 0.5 - abs(tf.y - 0.5)) * 0.6;
+  float fine = 1.0 - smoothstep(0.03, 0.1, tpx);
+  float joint = (1.0 - smoothstep(0.008, 0.008 + tpx, jd)) * fine;
+  float tv = mix(1.0, 0.86 + 0.28 * wHash(floor(tp)), fine);
+  // Yellow tactile paving where the pavement meets a crossing.
+  float dx = 1e5, dz = 1e5;
+  for (int i = 0; i < ${ROADS.length}; i++) {
+    dx = min(dx, min(abs(wp.x - uRoadLo[i]), abs(wp.x - uRoadHi[i])));
+    dz = min(dz, min(abs(wp.y - uRoadLo[i]), abs(wp.y - uRoadHi[i])));
+  }
+  float tactile = clamp(step(0.35, dx) * step(dx, 0.95) * step(dz, 3.6) + step(0.35, dz) * step(dz, 0.95) * step(dx, 3.6), 0.0, 1.0);
+  vec2 dp = fract(wp / 0.1) - 0.5;
+  float bump = smoothstep(0.33, 0.24, length(dp)) * fine;
+  diffuseColor.rgb = mix(diffuseColor.rgb * tv, vec3(0.5, 0.38, 0.04) * (0.85 + 0.3 * bump), tactile);
+  diffuseColor.rgb *= 1.0 - 0.5 * joint * (1.0 - tactile);
+}
+#endif
+// Pools of street-lamp light on the ground, after the detail so cracks and slabs show inside them.
+totalEmissiveRadiance += diffuseColor.rgb * vec3(0.75, 0.82, 1.0) * lampLight(vWetPos.xz) * 4.0;`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.55, uWet);
+roughnessFactor *= 1.0 - 0.45 * roadPolish;
 roughnessFactor = mix(roughnessFactor, 0.05, wetPud);`)
       .replace('#include <opaque_fragment>', `
 {
@@ -122,12 +218,12 @@ roughnessFactor = mix(roughnessFactor, 0.05, wetPud);`)
   ruv += rip * 0.01 * (0.35 + 0.65 * wetPud);
   ruv.x += (wetGrain - 0.5) * 0.012 * (1.0 - wetPud);
   float fres = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.0);
-  float amount = mix(uWet * 0.4, 0.92, wetPud) * mix(0.3, 1.0, fres);
+  float amount = mix(uWet * 0.4, 0.92, wetPud) * mix(0.3, 1.0, fres) * (1.0 - roadDull);
   vec3 refl = texture2D(tReflect, ruv, mix(3.2, 0.3, wetPud)).rgb;
   outgoingLight = outgoingLight * (1.0 - amount * 0.5) + refl * amount;
 }
 #include <opaque_fragment>`);
   };
-  material.customProgramCacheKey = () => `wet-${wet}-${puddle}-${grain}`;
+  material.customProgramCacheKey = () => `wet-${wet}-${puddle}-${grain}-${road}-${tiles}`;
   return material;
 }

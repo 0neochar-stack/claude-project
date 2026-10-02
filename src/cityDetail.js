@@ -37,13 +37,14 @@ export function buildCityDetail(group, plan, rand) {
   const parapets = [], hvac = [], tanks = [], masts = [], beacons = [], fans = [];
   for (const b of plan) {
     const top = CURB + (b.y0 || 0) + b.h;
+    const roofBusy = b.roof === 'helipad' || b.roof === 'garden' || b.roof === 'crane';
     const w = b.x1 - b.x0, d = b.z1 - b.z0, cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
     if (!b.covered) {
       parapets.push({ x: cx, y: top + 0.45, z: b.z0 + 0.15, sx: w, sy: 0.9, sz: 0.3 });
       parapets.push({ x: cx, y: top + 0.45, z: b.z1 - 0.15, sx: w, sy: 0.9, sz: 0.3 });
       parapets.push({ x: b.x0 + 0.15, y: top + 0.45, z: cz, sx: 0.3, sy: 0.9, sz: d - 0.6 });
       parapets.push({ x: b.x1 - 0.15, y: top + 0.45, z: cz, sx: 0.3, sy: 0.9, sz: d - 0.6 });
-      const n = Math.floor(range(1, 5));
+      const n = roofBusy ? 0 : Math.floor(range(1, 5));
       for (let k = 0; k < n; k++) {
         const sx = range(1.6, 3.6), sz = range(1.2, 2.6), sy = range(0.9, 1.8);
         const x = range(b.x0 + 1.5 + sx / 2, b.x1 - 1.5 - sx / 2), z = range(b.z0 + 1.5 + sz / 2, b.z1 - 1.5 - sz / 2);
@@ -51,7 +52,7 @@ export function buildCityDetail(group, plan, rand) {
         hvac.push({ x, y: top + sy / 2, z, sx, sy, sz, ry: rand() < 0.5 ? 0 : Math.PI / 2 });
         fans.push({ x, y: top + sy + 0.01, z, sx: Math.min(sx, sz) * 0.35, sy: 1, sz: Math.min(sx, sz) * 0.35 });
       }
-      if (rand() < 0.35 && w > 8 && d > 8) tanks.push({ x: range(b.x0 + 3, b.x1 - 3), y: top, z: range(b.z0 + 3, b.z1 - 3), sx: 1, sy: range(0.8, 1.3), sz: 1, ry: rand() * 6 });
+      if (!roofBusy && rand() < 0.35 && w > 8 && d > 8) tanks.push({ x: range(b.x0 + 3, b.x1 - 3), y: top, z: range(b.z0 + 3, b.z1 - 3), sx: 1, sy: range(0.8, 1.3), sz: 1, ry: rand() * 6 });
       if (b.h > 70 && rand() < 0.7) {
         const mh = range(8, 22);
         const mx = cx + range(-w / 4, w / 4), mz = cz + range(-d / 4, d / 4);
@@ -64,7 +65,7 @@ export function buildCityDetail(group, plan, rand) {
   add(instanced(new THREE.BoxGeometry(1, 1, 1), concrete, parapets, { layer: LAYER_MAIN_ONLY }));
   const unitMat = new THREE.MeshStandardMaterial({ color: 0x3a3b44, roughness: 0.6, metalness: 0.4 });
   add(instanced(new THREE.BoxGeometry(1, 1, 1), unitMat, hvac, { layer: LAYER_MAIN_ONLY }));
-  add(instanced(new THREE.CylinderGeometry(0.5, 0.5, 0.02, 14), new THREE.MeshStandardMaterial({ color: 0x0b0b10, roughness: 0.8 }), fans, { layer: LAYER_MAIN_ONLY }));
+  add(instanced(new THREE.CylinderGeometry(0.5, 0.5, 0.02, 8), new THREE.MeshStandardMaterial({ color: 0x0b0b10, roughness: 0.8 }), fans, { layer: LAYER_MAIN_ONLY }));
   {
     // Wooden water tank on steel legs with a conical cap.
     const parts = [new THREE.CylinderGeometry(1.5, 1.5, 3, 16).translate(0, 4.5, 0), new THREE.ConeGeometry(1.65, 1, 16).translate(0, 6.5, 0)];
@@ -85,7 +86,9 @@ export function buildCityDetail(group, plan, rand) {
     const seed = (((b.x0 + b.x1) / 2) * 0.137 + ((b.z0 + b.z1) / 2) * 0.719) % 1;
     const cell = 2.3 + (seed < 0 ? seed + 1 : seed) * 1.4;
     const top = Math.min(b.h, 45);
+    if (b.balconies || b.construction) continue;
     for (const f of b.faces) {
+      if (b.fireEscape === f) continue;
       const [nx, nz] = FACE_N[f];
       const lo = nx ? b.z0 : b.x0, hi = nx ? b.z1 : b.x1;
       const wall = nx ? (nx > 0 ? b.x1 : b.x0) : (nz > 0 ? b.z1 : b.z0);
@@ -105,38 +108,8 @@ export function buildCityDetail(group, plan, rand) {
   add(instanced(new THREE.BoxGeometry(0.8, 0.55, 0.36), new THREE.MeshStandardMaterial({ color: 0x8c8f99, roughness: 0.6, metalness: 0.3 }), acs, { layer: LAYER_MAIN_ONLY }));
   add(instanced(new THREE.CircleGeometry(0.2, 12).translate(0.12, 0, 0), new THREE.MeshStandardMaterial({ color: 0x1a1b20, roughness: 0.8 }), acFronts, { layer: LAYER_MAIN_ONLY }));
 
-  // ---------- street level ----------
-  const vendBodies = [], vendFronts = [], bins = [], bags = [], bollards = [];
-  const VEND = [0xff4fd8, 0x3ff0ff, 0xffffff, 0xff8a2b, 0x7dff6a];
-  for (const b of cityBuildings) {
-    for (const f of b.faces) {
-      if (rand() < 0.45) continue;
-      const [nx, nz] = FACE_N[f];
-      const lo = nx ? b.z0 : b.x0, hi = nx ? b.z1 : b.x1;
-      const wall = nx ? (nx > 0 ? b.x1 : b.x0) : (nz > 0 ? b.z1 : b.z0);
-      const n = rand() < 0.5 ? 2 : 3;
-      const start = range(lo + 2, hi - 2 - n * 1.05);
-      const color = pick(VEND);
-      for (let k = 0; k < n; k++) {
-        const along = start + k * 1.05;
-        const out = wall + (nx || nz) * 0.42;
-        const it = nx ? { x: out, y: CURB + 0.95, z: along, ry: nx > 0 ? Math.PI / 2 : -Math.PI / 2 } : { x: along, y: CURB + 0.95, z: out, ry: nz > 0 ? 0 : Math.PI };
-        vendBodies.push(it);
-        vendFronts.push({ ...it, x: it.x + nx * 0.41, z: it.z + nz * 0.41, color: k === 1 && rand() < 0.5 ? pick(VEND) : color, k: 1.6 });
-      }
-      // Bins and a pile of rubbish bags further along the wall.
-      const t = range(lo + 2, hi - 2);
-      const out = wall + (nx || nz) * 0.55;
-      const at = (dt, extra = {}) => (nx ? { x: out, z: t + dt, ...extra } : { x: t + dt, z: out, ...extra });
-      bins.push(at(0, { y: CURB + 0.55, ry: rand() }));
-      for (let k = 0; k < 4; k++) bags.push(at(0.8 + k * 0.4 + range(-0.1, 0.1), { y: CURB + 0.25 + (k === 3 ? 0.35 : 0), sx: range(0.8, 1.1), sy: range(0.7, 1), sz: range(0.8, 1.1), ry: rand() * 6 }));
-    }
-  }
-  const vendGeo = new THREE.BoxGeometry(0.98, 1.9, 0.8);
-  add(instanced(vendGeo, new THREE.MeshStandardMaterial({ color: 0xd9dbe2, roughness: 0.4, metalness: 0.2 }), vendBodies, { layer: LAYER_MAIN_ONLY }));
-  add(instanced(new THREE.PlaneGeometry(0.82, 1.3).translate(0, 0.18, 0), new THREE.MeshBasicMaterial(), vendFronts, { colors: true }));
-  add(instanced(new THREE.CylinderGeometry(0.32, 0.28, 1.1, 10), new THREE.MeshStandardMaterial({ color: 0x1f3a2c, roughness: 0.7 }), bins, { layer: LAYER_MAIN_ONLY }));
-  add(instanced(new THREE.IcosahedronGeometry(0.32, 0), new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.35, metalness: 0.1 }), bags, { layer: LAYER_MAIN_ONLY }));
+  // Street-level furniture now lives in cityProps.js.
+  const bollards = [];
 
   // ---------- intersections: traffic lights, bollards, curb stones ----------
   const poles = [], heads = [], lamps = [];

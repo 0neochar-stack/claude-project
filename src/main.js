@@ -334,6 +334,7 @@ function handleAction(a) {
     car.reset(p.x, p.z, p.heading);
     score.chain = 0;
     score.mult = 1;
+    city.setPieces.resetCones();
     toast('Back on the road');
   }
   if (a === 'gearbox') toast(toggleGearbox());
@@ -367,6 +368,15 @@ function avoidWalls(pos) {
 }
 
 function updateCamera(dt) {
+  // Debug: window.__cdFreeCam = { pos: [x, y, z], look: [x, y, z] } parks the camera anywhere.
+  const free = window.__cdFreeCam;
+  if (free) {
+    camera.position.set(...free.pos);
+    camera.lookAt(...free.look);
+    camera.fov = free.fov || 60;
+    camera.updateProjectionMatrix();
+    return;
+  }
   const f = new THREE.Vector3(Math.sin(car.h), 0, Math.cos(car.h));
   const carPos = new THREE.Vector3(car.x, 0, car.z);
   // In the garage the panel covers one side, so shift the framing to centre the car in what is left.
@@ -540,6 +550,7 @@ function frame(now) {
 
   carView.update(car, dt);
   emitSteam(dt);
+  city.setPieces.update(clock, dt, playing ? car : null, sound);
   particles.update(dt);
   skids.update(clock);
   updateCamera(dt);
@@ -576,7 +587,7 @@ input.onPadStatus = (status, id = '') => {
     line.textContent = 'This view blocks controllers. Open the game in its own browser tab to use one.';
   }
 };
-window.__cd = { car, score, input, profile, garage, skids, renderer, scene }; // handy from the console
+window.__cd = { car, score, input, profile, garage, skids, renderer, scene, city }; // handy from the console
 $('boot').remove();
 menu.hidden = false;
 syncOptions();
