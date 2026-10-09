@@ -1076,3 +1076,83 @@ export function buildCar(envMap, radial, look = {}) {
   api.setRims(look.rims || 0);
   return api;
 }
+
+// ---------- low-detail cars ----------
+// Traffic, parked cars and the police use the same body profiles as one vertex-coloured geometry (paint,
+// glass, trim, tyres, rims), about 1.6k triangles, plus a small geometry for the lamps. Origin at the
+// ground between the axles, nose toward +z, like the full model.
+const tintGeo = (geo, color) => {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  g.deleteAttribute('uv');
+  const c = new THREE.Color(color);
+  const n = g.attributes.position.count;
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  if (!g.attributes.normal) g.computeVertexNormals();
+  return g;
+};
+const lowCache = new Map();
+export function carLowGeometry(look = {}, paint = 0xffffff) {
+  const k = `${look.body || 'widebody'}|${(look.scale || []).join(',')}|${paint}|${look.police ? 1 : 0}`;
+  if (lowCache.has(k)) return lowCache.get(k);
+  applyProfile(look.body);
+  const [sx, sy, sz] = look.scale || [1, 1, 1];
+  const parts = [];
+  // Shell.
+  const zs = [], rings = [];
+  for (let i = 0; i <= 14; i++) { const z = -2.26 + (4.48 * i) / 14; zs.push(z); rings.push(smoothRing(bodySection(z), 1)); }
+  const shell = loft(rings, zs);
+  if (look.police) {
+    // Black and white: colour by height and length, doors white.
+    const g = tintGeo(shell, 0x0c0c10);
+    const pos = g.attributes.position, col = g.attributes.color;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i), z = pos.getZ(i);
+      if (y < 0.78 && Math.abs(z) < 1.05) col.setXYZ(i, 0.92, 0.92, 0.94);
+    }
+    parts.push(g);
+  } else parts.push(tintGeo(shell, paint));
+  // Glasshouse and roof.
+  const gz = [], gr = [];
+  const g0 = P.roof[P.roof.length - 1][0], g1 = P.roof[0][0];
+  for (let i = 0; i <= 6; i++) { const z = g0 - ((g0 - g1) * i) / 6; gz.unshift(z); gr.unshift(smoothRing(glassSection(z).ring, 1)); }
+  parts.push(tintGeo(loft(gr, gz), 0x10141c));
+  const rz = [], rr = [];
+  for (let i = 0; i <= 4; i++) {
+    const z = P.skin[0] - ((P.skin[0] - P.skin[1]) * i) / 4;
+    const s = glassSection(z);
+    rz.unshift(z);
+    rr.unshift(smoothRing(mirrorHalf([[0, s.top - 0.03], [s.ht * 0.94, s.top - 0.03], [s.ht * 0.5, s.top + 0.012], [0, s.top + 0.014]]), 1));
+  }
+  parts.push(tintGeo(loft(rr, rz), look.police ? 0xf0f0f2 : paint));
+  // Bumper shadows, grille and sills.
+  parts.push(tintGeo(new THREE.BoxGeometry(1.5, 0.14, 0.12).translate(0, 0.33, 2.2), 0x08080a));
+  parts.push(tintGeo(new THREE.BoxGeometry(1.4, 0.12, 0.12).translate(0, 0.33, -2.22), 0x08080a));
+  for (const s of [1, -1]) parts.push(tintGeo(new THREE.BoxGeometry(0.06, 0.08, 2.2).translate(s * (halfWidth(0) - 0.02), 0.26, 0), 0x0a0a0c));
+  // Wheels: tyre and rim face.
+  for (const [s, z] of [[1, FRONT_Z], [-1, FRONT_Z], [1, REAR_Z], [-1, REAR_Z]]) {
+    const x = s * TRACK;
+    parts.push(tintGeo(new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, 0.23, 10).rotateZ(Math.PI / 2).translate(x, WHEEL_R, z), 0x0b0b0d));
+    parts.push(tintGeo(new THREE.CircleGeometry(WHEEL_R * 0.66, 8).rotateY(s * Math.PI / 2).translate(x + s * 0.118, WHEEL_R, z), look.police ? 0x2a2c30 : 0x9aa0ad));
+  }
+  if (look.police) {
+    // Push bar.
+    parts.push(tintGeo(new THREE.BoxGeometry(1.0, 0.3, 0.08).translate(0, 0.45, 2.3), 0x111114));
+  }
+  const body = mergeGeometries(parts);
+  body.scale(sx, sy, sz);
+  body.computeBoundingSphere();
+  // Lamps: white heads and red tails, lit at night.
+  const lp = [];
+  const lamp = (w, h, d, x, y, z, c) => lp.push(tintGeo(new THREE.BoxGeometry(w, h, d).translate(x, y, z), c));
+  for (const s of [1, -1]) {
+    lamp(0.36, 0.08, 0.06, s * 0.58, shoulder(2.0) - 0.07, 2.2, 0xffffff);
+    lamp(0.34, 0.08, 0.05, s * 0.6, shoulder(-2.1) - 0.06, -2.26, 0xff1020);
+  }
+  const lights = mergeGeometries(lp);
+  lights.scale(sx, sy, sz);
+  const out = { body, lights, length: 4.5 * sz, width: 2 * halfWidth(0) * sx, roof: glassSection(-0.4).top * sy };
+  lowCache.set(k, out);
+  return out;
+}

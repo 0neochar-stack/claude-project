@@ -35,6 +35,7 @@ const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.info.autoReset = false; // counted per frame across all passes
 let pixelRatio = Math.min(devicePixelRatio || 1, preset.pixelRatio);
 
 const scene = new THREE.Scene();
@@ -105,6 +106,7 @@ function applyEnv(w) {
   const env = w.env;
   scene.background = env.background;
   scene.fog = env.fog;
+  scene.environment = env.sceneEnv || null;
   renderer.toneMappingExposure = env.exposure;
   bloom.enabled = preset.bloom && !!env.bloom;
   if (env.bloom) { bloom.strength = env.bloom.strength; bloom.radius = env.bloom.radius; bloom.threshold = env.bloom.threshold; }
@@ -592,6 +594,7 @@ function frame(now) {
   }
   if (inWorld && camera.view?.enabled) { camera.clearViewOffset(); camera.updateProjectionMatrix(); }
 
+  renderer.info.reset();
   if (inWorld) world.render?.(renderer, scene, camera, frameNo);
   if (bloom.enabled) composer.render();
   else renderer.render(scene, camera);
@@ -608,7 +611,7 @@ function frame(now) {
     perfTime = 0;
     perfFrames = 0;
   }
-  hud.fps(settings.showFps && driving ? `${Math.round(fpsShown)} fps · ${pixelRatio.toFixed(2)}x · ${renderer.info.render.calls} draws` : '');
+  hud.fps(settings.showFps && driving ? `${Math.round(fpsShown)} fps · ${pixelRatio.toFixed(2)}x · ${renderer.info.render.calls} draws · ${Math.round(renderer.info.render.triangles / 1000)}k tris` : '');
 }
 
 input.onPadStatus = (status, id = '') => {

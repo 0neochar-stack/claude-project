@@ -2,6 +2,7 @@
 // Every car runs the suite stock and fully upgraded, on the default Medium assist.
 import { CarBody } from '../src/physics.js';
 import { CARS, UPGRADES, MAX_LEVEL, buildSpec, Profile, upgradeCost } from '../src/garage.js';
+import { buildNetwork, bakeHeights, heightAt, roadQuery, crossSection, LOTS, inLot } from '../src/worlds/open/layout.js';
 
 const DT = 1 / 120;
 const deg = (r) => (r * 180) / Math.PI;
@@ -232,6 +233,53 @@ for (const c of CARS) {
   const again = new Profile(store);
   check('profile survives a reload', again.current === 'kaze' && again.credits === p.credits && again.car('kaze').levels.engine === 1 && again.car('kaze').induction === 'turbo', '');
   check('starter car comes twin-charged', new Profile({ getItem: () => null, setItem() {} }).car('ronin').induction === 'twin', '');
+}
+
+// ---------- open world layout ----------
+{
+  console.log('\nopen world');
+  const t0 = performance.now();
+  const net = buildNetwork();
+  const h = bakeHeights(net);
+  const ms = performance.now() - t0;
+  check('world layout builds quickly', ms < 4000, `${ms.toFixed(0)} ms`);
+  const limits = { highway: 0.065, coast: 0.07, touge: 0.125, ridge: 0.105 };
+  for (const r of net.roads) {
+    if (!limits[r.kind]) continue;
+    const S = r.samples;
+    let worst = 0;
+    // Grade over 12 m windows (single 3 m steps exaggerate rounding at the ends).
+    for (let i = 4; i < S.length; i++) worst = Math.max(worst, Math.abs(S[i].y - S[i - 4].y) / (S[i].s - S[i - 4].s));
+    check(`${r.name}: grade within limit`, worst <= limits[r.kind], `${(worst * 100).toFixed(1)}% (limit ${(limits[r.kind] * 100).toFixed(1)}%)`);
+  }
+  let poke = 0, where = null;
+  for (const r of net.roads) for (const p of r.samples) for (const f of [-1, 0, 1]) {
+    const lat = f * (r.hw + (r.gutter || 0));
+    const x = p.x - p.tz * lat, z = p.z + p.tx * lat;
+    const d = heightAt(h, x, z) - p.y;
+    if (d > poke) { poke = d; where = `${r.id} ${x.toFixed(0)},${z.toFixed(0)}`; }
+  }
+  check('terrain never pokes through a road', poke <= 0.01, poke > 0 ? `${poke.toFixed(2)} m at ${where}` : 'clear');
+  // Hairpins tight enough to drift, open enough to make.
+  const touge = net.byId.touge;
+  let minR = Infinity;
+  for (let i = 3; i < touge.samples.length - 3; i++) {
+    const a = touge.samples[i - 3], c = touge.samples[i + 3];
+    const turn = Math.abs(Math.atan2(a.tx * c.tz - a.tz * c.tx, a.tx * c.tx + a.tz * c.tz));
+    if (turn > 1e-3) minR = Math.min(minR, (c.s - a.s) / turn);
+  }
+  check('touge hairpins are drivable', minR > 14 && minR < 30, `tightest radius ${minR.toFixed(1)} m`);
+  check('touge climbs the mountain', touge.samples[touge.samples.length - 1].y - touge.samples[0].y > 120, `${(touge.samples[touge.samples.length - 1].y - touge.samples[0].y).toFixed(0)} m`);
+  for (const lot of LOTS) {
+    const cx = lot.shape === 'circle' ? lot.x : (lot.x0 + lot.x1) / 2, cz = lot.shape === 'circle' ? lot.z : (lot.z0 + lot.z1) / 2;
+    const off = Math.abs(heightAt(h, cx, cz) - (lot.y - 0.1));
+    check(`${lot.name} is flat at its road's height`, off < 0.3 && inLot(lot, cx, cz), `${off.toFixed(2)} m off`);
+  }
+  // Gutters dip and come back up; curbs step up.
+  const q = {};
+  roadQuery(net, touge.samples[200].x, touge.samples[200].z, q);
+  check('gutter dips past the touge edge', crossSection(touge, touge.hw + touge.gutter / 2) < -0.1 && crossSection(touge, touge.hw + touge.gutter + 0.5) === null && q.road === touge, '');
+  check('town curbs step up to the sidewalk', crossSection(net.byId.st0, net.byId.st0.hw + 1) > 0.1, '');
 }
 
 if (failures) {
