@@ -11,6 +11,9 @@
     "three": "0.169.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "4.2.1",
+    "@gltf-transform/extensions": "4.2.1",
+    "@gltf-transform/functions": "4.2.1",
     "esbuild": "0.24.0"
   }
 }

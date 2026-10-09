@@ -24,6 +24,7 @@ import { Customize } from './customize.js';
 import { createShowroom } from './worlds/showroom.js';
 import { createNeonWorld } from './worlds/neon.js';
 import { createOpenWorld } from './worlds/open.js';
+import { MODEL_CREDITS } from './modelList.js';
 
 const $ = (id) => document.getElementById(id);
 const isTouch = matchMedia('(pointer: coarse)').matches;
@@ -519,6 +520,7 @@ const SETTINGS = [
   { key: 'volume', label: 'Volume', range: [0, 1, 0.05] },
 ];
 function settingValue(key) { return key === 'gearbox' ? (car.autoGear ? 'auto' : 'manual') : settings[key]; }
+$('model-credits').innerHTML = MODEL_CREDITS.map(([what, who]) => `<div><b>${who}</b>${what}</div>`).join('');
 function renderSettings() {
   $('settings-rows').innerHTML = SETTINGS.map((s) => {
     const label = `<div class="row__label"><b>${s.label}</b>${s.note ? `<span>${s.note}</span>` : ''}</div>`;

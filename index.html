@@ -212,6 +212,8 @@ input[type="range"]:focus::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255
 .keys div { display: flex; justify-content: space-between; gap: 10px; padding-block: 6px; border-bottom: 1px solid var(--line); min-width: 0; }
 .keys b { font: 700 11px/1.4 var(--mono); color: var(--accent); white-space: nowrap; }
 .keys span { color: var(--dim); font-size: 13px; text-align: right; }
+.model-credits div { padding-block: 6px; border-bottom: 1px solid var(--line); color: var(--dim); font-size: 13px; line-height: 1.4; }
+.model-credits b { font: 700 11px/1.4 var(--mono); color: var(--accent); margin-right: 8px; }
 .pad-status { color: var(--accent); }
 .pad-note { flex-basis: 100%; color: var(--yellow); font: 500 12px/1.4 var(--mono); }
 
@@ -462,6 +464,10 @@ body.is-touch .scorebox { display: none; }
       </div>
       <div class="label" style="line-height:1.6">Controller: RT gas · LT brake · A/B handbrake · X clutch · LB/RB shift · Y camera · Start pause</div>
       <div class="label pad-status" id="pad-status">Plug in a controller and press any button</div>
+    </div>
+    <div class="group">
+      <h3 class="group__title">Model credits</h3>
+      <div class="model-credits" id="model-credits"></div>
     </div>
     <button class="btn" type="button" data-nav data-act="close-settings">Done</button>
   </div>

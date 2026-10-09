@@ -3,6 +3,7 @@
 // shed petals around the camera, and every trunk is a collider.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { bakeStatic } from '../../models.js';
 import { HALF, LA, VILLAGE, PEAK, heightAt, roadQuery, rng, fbm, smooth, PCH_Z, BOULEVARD_Z, inLot } from './layout.js';
 
 const CHUNK = 500;
@@ -278,14 +279,17 @@ function rockModel(seed) {
 export function buildNature(net, heights, preset, extra = {}) {
   const group = new THREE.Group();
   const colliders = [];
-  const lists = { palm: [], sakura: [], cedar: [], oak: [], rock: [] };
+  const lists = { palm: [], sakura: [], cedar: [], oak: [], rock: [], bush: [], maple: [] };
+  const assets = extra.assets || new Map();
+  const RB = rng(31337); // bushes have their own stream so the trees stay where they were
   const R = rng(2024);
   const q = {};
   const nearRoad = (x, z, pad) => {
     roadQuery(net, x, z, q);
     return q.road && q.d < q.road.hw + (q.road.sidewalk || q.road.gutter || q.road.shoulder || 0) + pad;
   };
-  const add = (kind, x, z, s = 1, rot = R() * Math.PI * 2, variant = Math.floor(R() * 3)) => {
+  // variant is taken modulo the number of models of that kind.
+  const add = (kind, x, z, s = 1, rot = R() * Math.PI * 2, variant = Math.floor(R() * 60)) => {
     lists[kind].push({ x, z, y: heightAt(heights, x, z), s, rot, variant });
   };
   const density = preset.props;
@@ -365,7 +369,28 @@ export function buildNature(net, heights, preset, extra = {}) {
     const sl = Math.hypot(heightAt(heights, px + 2, pz) - heightAt(heights, px - 2, pz), heightAt(heights, px, pz + 2) - heightAt(heights, px, pz - 2)) / 4;
     if (y < 1.5 || sl > 1.0) continue;
     if (mountain > 0.35) add('cedar', px, pz, 0.8 + R() * 0.5);
-    else add('oak', px, pz, 0.7 + R() * 0.6);
+    else {
+      add('oak', px, pz, 0.7 + R() * 0.6);
+      // Undergrowth round the hill trees.
+      for (let k = RB() < 0.55 ? 1 + Math.floor(RB() * 3) : 0; k > 0; k--) {
+        const a = RB() * Math.PI * 2, d = 2.5 + RB() * 5, bx = px + Math.cos(a) * d, bz = pz + Math.sin(a) * d;
+        if (!nearRoad(bx, bz, 2)) lists.bush.push({ x: bx, z: bz, y: heightAt(heights, bx, bz), s: 0.8 + RB() * 0.6, rot: RB() * 6.28, variant: Math.floor(RB() * 60) });
+      }
+    }
+  }
+  // Brush along the highway verges, and red maples along the touge.
+  for (const [id, kind, every, near, far] of [['hwy', 'bush', 9, 3, 14], ['touge', 'maple', 7, 2, 8], ['ridge', 'maple', 14, 3, 10], ['vside', 'maple', 10, 3, 6]]) {
+    const r = net.byId[id];
+    if (!r) continue;
+    for (let s0 = 10; s0 < r.length - 10; s0 += every * (0.6 + RB() * 0.8)) {
+      const p = r.samples[Math.round(s0 / 3)];
+      const side = RB() < 0.5 ? 1 : -1, off = r.hw + (r.shoulder || r.gutter || 0) + near + RB() * (far - near);
+      const bx = p.x - p.tz * off * side, bz = p.z + p.tx * off * side;
+      if (nearRoad(bx, bz, 1.5) || net.lots.some((l) => inLot(l, bx, bz, 6))) continue;
+      const y = heightAt(heights, bx, bz);
+      if (y < 1 || Math.abs(y - p.y) > 5) continue;
+      lists[kind].push({ x: bx, z: bz, y, s: 0.7 + RB() * 0.7, rot: RB() * 6.28, variant: Math.floor(RB() * 60) });
+    }
   }
   // Rocks on the steep faces of the mountain.
   for (let k = 0; k < 900 * density; k++) {
@@ -387,25 +412,42 @@ export function buildNature(net, heights, preset, extra = {}) {
     oak: windy(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }), { bend: 0.0015 }),
     rock: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }),
   };
-  const models = {
+  const procModels = {
     palm: [0, 1, 2].map((v) => ({ near: palmModel([10, 14, 18][v], [0.5, 1.4, 0.9][v], 14, 31 + v), far: palmModel([10, 14, 18][v], [0.5, 1.4, 0.9][v], 14, 31 + v, true), leaf: mats.palmLeaf })),
     sakura: [0, 1, 2].map((v) => ({ near: sakuraModel(51 + v), far: sakuraModel(51 + v, true), leaf: mats.blossom })),
     cedar: [0, 1, 2].map((v) => ({ near: cedarModel([16, 20, 24][v], 71 + v), far: cedarModel([16, 20, 24][v], 71 + v, true), leaf: mats.cedar })),
     oak: [0, 1, 2].map((v) => ({ near: oakModel(91 + v), far: oakModel(91 + v, true), leaf: mats.oak })),
     rock: [0, 1, 2].map((v) => { const m = rockModel(111 + v); return { near: m, far: m, leaf: null, woodMat: mats.rock }; }),
   };
+  // Each model variant is a list of [geometry, material] parts per level of detail.
+  const parts = (m, leaf, woodMat) => [...(m.wood ? [[m.wood, woodMat || mats.wood]] : []), ...(m.leaves ? [[m.leaves, leaf]] : [])];
+  const models = {};
+  for (const [kind, vs] of Object.entries(procModels)) models[kind] = vs.map((v) => ({ near: parts(v.near, v.leaf, v.woodMat), far: parts(v.far, v.leaf, v.woodMat) }));
+  // Downloaded models where they loaded: broadleaf trees for the hills, rocks, bushes and red maples.
+  const glb = (key, opts) => (assets.get(key) ? bakeStatic(assets.get(key), opts) : null);
+  const swaying = (v, bend) => v.parts.map((p) => [p.geometry, windy(p.material, { bend })]);
+  const trees = glb('trees', { split: true, height: 10, matte: true });
+  if (trees) models.oak = trees.map((v, i) => ({ near: swaying(v, 0.0012), far: models.oak[i % models.oak.length].far }));
+  const rocks = [glb('rockA', { length: 2.8, matte: true }), glb('rockB', { length: 2.6, matte: true })].filter(Boolean).flat();
+  if (rocks.length) models.rock = rocks.map((v) => { const p = v.parts.map((q) => [q.geometry, q.material]); return { near: p, far: p }; });
+  const bushes = glb('bushes', { split: true, height: 1.5, matte: true });
+  models.bush = bushes ? bushes.map((v) => { const p = swaying(v, 0.02); return { near: p, far: null }; }) : [];
+  const maple = glb('maple', { height: 2.2, matte: true });
+  models.maple = maple ? maple.map((v) => { const p = swaying(v, 0.012); return { near: p, far: null }; }) : [];
   const radius = { palm: 0.32, sakura: 0.3, cedar: 0.42, oak: 0.55, rock: 0.9 };
 
   // Group by chunk, kind and variant, then one InstancedMesh per (chunk, kind, variant, part, lod).
   const chunks = new Map();
   const m4 = new THREE.Matrix4(), qt = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   for (const [kind, list] of Object.entries(lists)) {
+    if (!models[kind].length) continue; // a downloaded model that didn't load
     for (const t of list) {
       const key = `${Math.floor((t.x + HALF) / CHUNK)},${Math.floor((t.z + HALF) / CHUNK)}`;
       let c = chunks.get(key);
       if (!c) chunks.set(key, (c = { items: {}, cx: 0, cz: 0, n: 0 }));
-      (c.items[`${kind}:${t.variant}`] ||= []).push(t);
+      (c.items[`${kind}:${t.variant % models[kind].length}`] ||= []).push(t);
       c.cx += t.x; c.cz += t.z; c.n++;
+      if (kind === 'bush' || kind === 'maple') continue; // you can plough through the brush
       if (kind !== 'rock' || t.s > 1) colliders.push({ type: 'circle', x: t.x, z: t.z, r: radius[kind] * t.s * (kind === 'rock' ? 1.1 : 1) });
     }
   }
@@ -416,9 +458,7 @@ export function buildNature(net, heights, preset, extra = {}) {
       const [kind, v] = k.split(':');
       const model = models[kind][Number(v)];
       for (const [lod, holder] of [['near', near], ['far', far]]) {
-        const geo = model[lod];
-        const make = (g, mat, shadow) => {
-          if (!g) return;
+        for (const [g, mat] of model[lod] || []) {
           const im = new THREE.InstancedMesh(g, mat, items.length);
           items.forEach((t, i) => {
             ps.set(t.x, t.y - 0.15, t.z);
@@ -427,12 +467,10 @@ export function buildNature(net, heights, preset, extra = {}) {
             im.setMatrixAt(i, m4.compose(ps, qt, sc));
           });
           im.computeBoundingSphere();
-          im.castShadow = shadow && lod === 'near';
+          im.castShadow = lod === 'near' && kind !== 'bush';
           im.receiveShadow = false;
           holder.add(im);
-        };
-        make(geo.wood, model.woodMat || mats.wood, true);
-        make(geo.leaves, model.leaf, true);
+        }
       }
     }
     far.visible = false;

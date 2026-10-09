@@ -13,13 +13,18 @@ import { Traffic } from './traffic.js';
 import { Police } from './police.js';
 import { Knockables } from './knockables.js';
 import { buildLandmarks } from './landmarks.js';
+import { buildDecor } from './decor.js';
 import { disposeTree } from '../util.js';
+import { loadModels } from '../../models.js';
+import { MODEL_FILES } from '../../modelList.js';
 
 const HULL = [{ o: 1.3, r: 1.0 }, { o: -1.3, r: 1.0 }];
 const TIME_PRESETS = { day: 13.5, dusk: 17.75, night: 23.4 };
 
 export async function createOpenWorld({ preset, sound, particles, settings, renderer, progress }) {
   const root = new THREE.Group();
+  // The downloaded models load in the background while the map is laid out.
+  const assetsReady = loadModels(Object.keys(MODEL_FILES));
   await progress(0.02, 'Surveying the roads…');
   const net = buildNetwork();
   await progress(0.08, 'Shaping the hills and the mountain…');
@@ -47,14 +52,18 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   await progress(0.44, 'Filling the ocean and the waterfall…');
   const water = buildWater(net, heights, preset, site);
   root.add(water.group);
+  await progress(0.47, 'Unpacking the models…');
+  const assets = await assetsReady;
   await progress(0.5, 'Building the town and the village…');
-  const town = buildTown(net, heights, preset);
+  const town = buildTown(net, heights, preset, assets);
   root.add(town.group);
   await progress(0.66, 'Planting palms, pines and cherry trees…');
-  const nature = buildNature(net, heights, preset, { yardTrees: town.yardTrees, sakuraSpots: town.sakuraSpots, rocks: water.rocks });
+  const nature = buildNature(net, heights, preset, { yardTrees: town.yardTrees, sakuraSpots: town.sakuraSpots, rocks: water.rocks, assets });
   root.add(nature.group);
   const marks = buildLandmarks(net, heights);
   root.add(marks.group);
+  const decor = buildDecor(net, heights, assets, preset, { mailboxes: town.mailboxes, toriiSpot: town.toriiSpot, pagodaSpot: town.pagodaSpot });
+  root.add(decor.group);
   await progress(0.8, 'Wiring the street lights…');
   const lamps = buildLamps(roads.lamps, town.lamps, preset, groundAt);
   root.add(lamps.group);
@@ -153,7 +162,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   const cells = new Map();
   const key = (cx, cz) => cx * 4096 + cz;
   // Curbs and the median are mountable (you hop up onto them); only real obstacles stop the car.
-  const colliders = [...roads.segs.filter((s) => !s.curb && !s.low).map((s) => ({ type: 'seg', ...s })), ...town.colliders, ...nature.colliders, ...lamps.colliders, ...marks.colliders];
+  const colliders = [...roads.segs.filter((s) => !s.curb && !s.low).map((s) => ({ type: 'seg', ...s })), ...town.colliders, ...nature.colliders, ...lamps.colliders, ...marks.colliders, ...decor.colliders];
   colliders.forEach((c, idx) => {
     let x0, x1, z0, z1;
     if (c.type === 'seg') { x0 = Math.min(c.ax, c.bx) - 2; x1 = Math.max(c.ax, c.bx) + 2; z0 = Math.min(c.az, c.bz) - 2; z1 = Math.max(c.az, c.bz) + 2; }
@@ -371,6 +380,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       roads.update(camPos);
       town.update(t, camPos);
       marks.update(t, sky.state.night);
+      decor.update(t, dt, camPos, car);
       bins.update(dt);
       if (playing) {
         traffic.update(dt, car, camPos, sky.state.night);
@@ -391,7 +401,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       disposeTree(root);
       for (const e of Object.values(envs)) e.dispose();
     },
-    debug: { colliders, net, heights, roads, town, nature, water, traffic, police, sky },
+    debug: { decor, assets, colliders, net, heights, roads, town, nature, water, traffic, police, sky },
   };
   void CELL;
   await progress(1, 'Ready');

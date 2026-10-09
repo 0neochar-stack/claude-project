@@ -13,7 +13,7 @@ const AREA = 400;
 const AVES = [-1820, -1660, -1500, -1340, -1180, -1020, -860, -700];
 const RES_STREETS = [-1420, -1260, -1100, -780, -620, -460];
 
-export function buildTown(net, heights, preset) {
+export function buildTown(net, heights, preset, assets = new Map()) {
   const group = new THREE.Group();
   const R = rng(777);
   const T = makeTextures();
@@ -53,6 +53,8 @@ export function buildTown(net, heights, preset) {
   const bins = [];
   const yardTrees = [];
   const sakuraSpots = [];
+  const mailboxes = []; // curbside mailboxes, as downloaded models (decor.js) when there is one
+  let toriiSpot = null, pagodaSpot = null;
   const lamps = [];
   const parked = [];
   const paved = [];
@@ -166,8 +168,11 @@ export function buildTown(net, heights, preset) {
       }
       // Mailbox at the sidewalk.
       const mb = at(cx, cz, rot, h.gx + (h.gSide < 0 ? 2.2 : -2.2), d / 2 + set - 0.4);
-      b.box(mb.x, ground(mb.x, mb.z), mb.z, 0.08, 1.0, 0.08, rot, 'metal', 0x303034);
-      b.box(mb.x, ground(mb.x, mb.z) + 1.0, mb.z, 0.25, 0.25, 0.45, rot, 'metal', 0x2a2a2e);
+      if (assets.has('mailbox')) mailboxes.push({ x: mb.x, z: mb.z, rot });
+      else {
+        b.box(mb.x, ground(mb.x, mb.z), mb.z, 0.08, 1.0, 0.08, rot, 'metal', 0x303034);
+        b.box(mb.x, ground(mb.x, mb.z) + 1.0, mb.z, 0.25, 0.25, 0.45, rot, 'metal', 0x2a2a2e);
+      }
       // Now and then a car parked at the curb.
       if (kind !== 'beach' && R() < 0.14) {
         const px = cx + (R() - 0.5) * 6;
@@ -502,7 +507,9 @@ export function buildTown(net, heights, preset) {
     const g = ground(cx, cz) - 0.4;
     let y = g, size = 8;
     b.box(cx, g - 0.6, cz, 11, 1.4, 11, 0, 'concrete', 0x8a887e);
-    for (let tier = 0; tier < 5; tier++) {
+    // The downloaded pagoda goes on the plinth when it loaded (decor.js); otherwise build one.
+    if (assets.has('pagoda')) pagodaSpot = { x: cx, z: cz, y: g + 0.1 };
+    else for (let tier = 0; tier < 5; tier++) {
       const h = tier === 0 ? 3.6 : 2.6;
       b.box(cx, y + 0.8, cz, size, h, size, 0, 'boards', 0xb03a22);
       b.decal('win', cx, y + 0.8 + h / 2, cz + size / 2 + 0.03, size * 0.4, h * 0.6, 0, CELLS.slide);
@@ -511,8 +518,8 @@ export function buildTown(net, heights, preset) {
       y += 0.4;
       size *= 0.84;
     }
-    b.box(cx, y + 0.6, cz, 0.3, 7, 0.3, 0, 'metal', 0x9a7a3a);
-    for (let k = 0; k < 7; k++) b.box(cx, y + 1.6 + k * 0.7, cz, 0.9 - k * 0.07, 0.12, 0.9 - k * 0.07, 0, 'metal', 0xb08a3a);
+    if (!pagodaSpot) b.box(cx, y + 0.6, cz, 0.3, 7, 0.3, 0, 'metal', 0x9a7a3a);
+    if (!pagodaSpot) for (let k = 0; k < 7; k++) b.box(cx, y + 1.6 + k * 0.7, cz, 0.9 - k * 0.07, 0.12, 0.9 - k * 0.07, 0, 'metal', 0xb08a3a);
     box(cx, cz, 11, 11, 0);
     // Hall.
     const hx = cx - 24, hz = cz + 4;
@@ -524,6 +531,7 @@ export function buildTown(net, heights, preset) {
     b.roof('kawara', hx, hg + 4.8, hz, 12, 8, 0, 3.2, 2.0, 'gable', 0xffffff);
     b.decal('winLit', hx, hg + 2.4, hz + 4.04, 8, 3, 0, CELLS.shoji);
     box(hx, hz, 14, 10, 0);
+    toriiSpot = { x: hx, z: hz + 13, rot: 0 };
     for (let k = 0; k < 8; k++) sakuraSpots.push({ x: cx - 30 + R() * 50, z: cz - 14 + R() * 30, s: 0.9 + R() * 0.3 });
   }
 
@@ -660,6 +668,9 @@ export function buildTown(net, heights, preset) {
     bins,
     yardTrees,
     sakuraSpots,
+    mailboxes,
+    toriiSpot,
+    pagodaSpot,
     lamps,
     paved,
     spawn,
