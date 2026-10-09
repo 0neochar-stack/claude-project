@@ -112,7 +112,8 @@ button { font: inherit; color: inherit; }
 .cust__head { padding: calc(18px + var(--safe-t)) 20px 12px; display: grid; gap: 12px; border-bottom: 1px solid var(--line); }
 .cust__top { display: flex; align-items: center; gap: 10px; }
 .cust__title { margin: 0; font: italic 800 26px/1 var(--display); letter-spacing: 0.04em; text-transform: uppercase; }
-.cust__top .credits { margin-left: auto; }
+.cust__top .credits { margin-left: auto; white-space: nowrap; }
+.cust__top .btn { white-space: nowrap; flex: none; }
 .cust__car { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .cust__carname { font: italic 800 34px/1 var(--display); text-transform: uppercase; letter-spacing: 0.01em; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -297,6 +298,8 @@ body.is-touch .scorebox { display: none; }
   .cust__panel { width: 100%; height: 64%; border-left: 0; border-top: 1px solid var(--line); background: var(--glass-solid); }
   .cust__panel::before { left: 0; right: 0; top: -1px; bottom: auto; width: auto; height: 2px; }
   .cust__carname { font-size: 26px; }
+  .cust__title { font-size: 20px; }
+  .cust__top .credits { font-size: 15px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cars { grid-template-columns: minmax(0, 1fr); }
   .keys { grid-template-columns: minmax(0, 1fr); }

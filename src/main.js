@@ -285,6 +285,7 @@ function leaveCustomize() {
     ground = world.flat ? null : groundPose(car.x, car.z, car.h);
     car.spec = profile.spec();
     saved = null;
+    $('hud').hidden = false;
     screens.set('pause');
     return;
   }
@@ -296,6 +297,7 @@ function leaveCustomize() {
 function openCustomize(fromPause) {
   if (fromPause) saved = { x: car.x, z: car.z, heading: car.h };
   state = 'customize';
+  $('hud').hidden = true;
   toShowroom();
   customize.open(fromPause);
   screens.set('customize');

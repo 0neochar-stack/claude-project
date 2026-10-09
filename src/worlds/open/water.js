@@ -118,10 +118,11 @@ const fallFrag = /* glsl */ `
     // Streaks falling down: noise stretched along the flow and scrolled.
     vec2 p = vec2(vUv.x * 46.0, vUv.y * 5.0 - uTime * uSpeed);
     float s = vnoise(p) * 0.55 + vnoise(p * vec2(2.1, 3.0) + 3.0) * 0.3 + vnoise(p * vec2(5.0, 7.0) + 7.0) * 0.15;
-    float foam = smoothstep(0.35, 0.85, s);
-    float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
-    float a = (0.38 + foam * 0.55) * edge * (0.75 + 0.25 * vUv.y);
-    vec3 col = mix(uTint * 0.75, vec3(0.95, 0.97, 1.0), foam);
+    float foam = smoothstep(0.3, 0.75, s);
+    float edge = smoothstep(0.0, 0.1, vUv.x) * smoothstep(1.0, 0.9, vUv.x);
+    // Thicker and whiter toward the bottom, where the fall breaks up into spray.
+    float a = (0.55 + foam * 0.45) * edge * (0.8 + 0.2 * (1.0 - vUv.y));
+    vec3 col = mix(uTint * 0.9, vec3(0.96, 0.98, 1.0), foam * 0.85 + (1.0 - vUv.y) * 0.25);
     col *= mix(1.0, 0.45, uNight);
     col += vec3(0.25, 0.45, 0.7) * uNight * foam * 0.5; // lit from below at night
     gl_FragColor = vec4(col, a);
@@ -187,7 +188,10 @@ export function buildWater(net, heights, preset, site) {
   // crosses the road near its downhill edge and lands in the pool.
   const cols = [];
   for (let k = -3; k <= 3; k++) cols.push(S[clamp(site.i + k * 2, 0, S.length - 1)]);
-  const latAt = (t) => u * (site.edge + 3.5) - u * (site.edge + 3.5 + 13) * Math.pow(t, 1.5);
+  // Shoots off the lip, arcs out over the road and crosses it near the middle, then drops into the pool.
+  const tCross = (top - p.y) / (top - bottom);
+  const k = Math.log((site.edge + 3.5 + 0.5) / (site.edge + 3.5 + 13)) / Math.log(tCross);
+  const latAt = (t) => u * (site.edge + 3.5) - u * (site.edge + 3.5 + 13) * Math.pow(t, k);
   const rows = 22;
   const pos = [], uv = [], idx = [];
   cols.forEach((c, ci) => {
@@ -218,9 +222,32 @@ export function buildWater(net, heights, preset, site) {
   const veil = new THREE.Mesh(fallGeo.clone().translate(nx * u * 1.2, 0, nz * u * 1.2), fallMat);
   veil.scale.set(1, 1, 1);
   group.add(veil);
-  // Where the curtain hits the road: the crossing line.
+  // Where the curtain hits the road: the crossing line, with churning foam and a wet sheen across it.
   const tRoad = Math.pow(Math.max(0, (top - p.y) / (top - bottom)), 1);
   const crossLat = latAt(tRoad);
+  {
+    const fp = [], fu = [], fi = [];
+    cols.forEach((c, ci) => {
+      for (const [o, v] of [[-3.5, 0], [3.5, 1]]) { const l = crossLat + o; fp.push(c.x + nx * l, c.y + 0.07, c.z + nz * l); fu.push(ci / (cols.length - 1), v); }
+      if (ci) { const b = (ci - 1) * 2; fi.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); }
+    });
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
+    fg.setAttribute('uv', new THREE.Float32BufferAttribute(fu, 2));
+    fg.setIndex(fi);
+    const foamRoad = new THREE.Mesh(fg, new THREE.ShaderMaterial({
+      uniforms: fallU, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8,
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform float uTime; uniform float uNight; varying vec2 vUv;
+        float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+        float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + 1.0), f.x), f.y); }
+        void main(){ float c = 1.0 - abs(vUv.y - 0.5) * 2.0;
+          float f = n(vec2(vUv.x * 60.0, vUv.y * 8.0 + uTime * 3.0)) * 0.6 + n(vec2(vUv.x * 140.0 - uTime, vUv.y * 20.0)) * 0.4;
+          float a = smoothstep(0.0, 0.6, c) * (0.35 + smoothstep(0.45, 0.8, f) * 0.6);
+          gl_FragColor = vec4(vec3(0.95, 0.97, 1.0) * mix(1.0, 0.4, uNight), a); }`,
+    }));
+    group.add(foamRoad);
+  }
   // Pool surface.
   const poolU = { uTime: { value: 0 }, uNight: { value: 0 } };
   const poolMesh = new THREE.Mesh(new THREE.CircleGeometry(pool.r + 2, 40).rotateX(-Math.PI / 2).translate(pool.x, pool.y, pool.z), new THREE.ShaderMaterial({
@@ -301,7 +328,7 @@ export function buildWater(net, heights, preset, site) {
         splashCooldown = 0.6;
         if (splashEl) { splashEl.style.transition = 'none'; splashEl.style.opacity = '1'; void splashEl.offsetWidth; splashEl.style.transition = 'opacity 1.6s'; splashEl.style.opacity = '0'; }
         for (let k = 0; k < 40; k++) particles.emit(car.x + (Math.random() - 0.5) * 3, p.y + 1 + Math.random() * 1.5, car.z + (Math.random() - 0.5) * 3, car.vx * 0.3 + (Math.random() - 0.5) * 4, 1 + Math.random() * 2, car.vz * 0.3 + (Math.random() - 0.5) * 4, 1, 2.2, 1.2, 0.3);
-        sound.burst?.({ freq: 900, type: 'bandpass', q: 0.4, gain: 0.5, attack: 0.01, decay: 0.8 });
+        if (sound.ctx) sound.burst({ freq: 900, type: 'bandpass', q: 0.4, gain: 0.5, attack: 0.01, decay: 0.8 });
       }
       inside = through;
     },
