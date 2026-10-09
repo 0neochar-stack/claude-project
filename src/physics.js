@@ -230,6 +230,7 @@ export class CarBody {
 
     // ---------- front tyres (free rolling, ABS brakes) ----------
     let Fu = 0, Fv = 0, Tq = 0;
+    const frontFy = [0, 0], frontMuY = [1, 1], frontMuX = [1, 1];
     const brakeF = (brake * s.brakeTorque * s.brakeBias) / s.wheelRadius / 2;
     for (let i = 0; i < 2; i++) {
       const py = i === 0 ? s.trackF / 2 : -s.trackF / 2;
@@ -238,8 +239,9 @@ export class CarBody {
       const lat = -wu * sd + wv * cd;
       const N = load[i], k = muScale(N);
       const sy = Math.atan2(lat, Math.max(Math.abs(lng), VREF)) / s.alphaPeak;
-      const muY = s.muLat * k * N, muX = s.muLong * k * N;
+      const muY = s.muLat * (s.muLatF ?? 1) * k * N, muX = s.muLong * k * N;
       let fy = -Math.sign(sy) * muY * grip(Math.abs(sy), s.tail);
+      frontFy[i] = fy; frontMuY[i] = muY; frontMuX[i] = muX;
       let fx = 0;
       if (brakeF > 0 && Math.abs(lng) > 0.05) {
         fx = -Math.sign(lng) * Math.min(brakeF, muX * 0.88);
@@ -310,7 +312,7 @@ export class CarBody {
         if (sig > 1e-9) {
           const g = grip(sig, s.tail);
           fx = s.muLong * k * N * g * (sx / sig);
-          fy = -s.muLat * k * N * g * (sy / sig);
+          fy = -s.muLat * (s.muLatR ?? 1) * k * N * g * (sy / sig);
         }
         out[j * 2] = fx; out[j * 2 + 1] = fy;
         sum += fx;
@@ -346,12 +348,27 @@ export class CarBody {
       return nw;
     };
 
-    const surge = this.kick > 0 ? (this.kickPower || 0) * (this.kick / 0.35) * s.torque * 1.6 * ratio * eff : 0;
+    // The kick always has enough bite to break the rears loose, so it works on low-power cars too.
+    const kickT = Math.max(s.torque * 1.6 * ratio * eff, 1.8 * s.muLong * ((m * G * s.a) / L) * s.wheelRadius);
+    const surge = this.kick > 0 ? (this.kickPower || 0) * (this.kick / 0.35) * kickT : 0;
+    // Driveline: all-wheel drive sends a share to the front axle; an open or limited-slip diff caps the rear
+    // drive at what the lighter-loaded rear tyre can take (welded passes everything).
+    let frontDrive = 0;
+    const toAxle = (T) => {
+      if (s.awd) { frontDrive = T * s.awd; T *= 1 - s.awd; }
+      const lock = s.diffLock ?? 1;
+      if (lock < 1) {
+        const gl = s.muLong * muScale(load[2]) * load[2], gr = s.muLong * muScale(load[3]) * load[3];
+        const cap = (2 * Math.min(gl, gr) + lock * Math.abs(gl - gr)) * R * 1.05;
+        if (Math.abs(T) > cap) T = Math.sign(T) * cap;
+      }
+      return T;
+    };
     let w;
     if (this.locked) {
       // Engine and wheels turn as one.
       const te = engineTorque(this.engW);
-      w = axle(te * ratio * eff + surge, s.wheelInertia + s.engineInertia * ratio * ratio);
+      w = axle(toAxle(te * ratio * eff) + surge, s.wheelInertia + s.engineInertia * ratio * ratio);
       const newEng = w * ratio;
       // The clutch slips if holding them together takes more torque than it can carry.
       const needed = te - (s.engineInertia * (newEng - this.engW)) / dt;
@@ -363,7 +380,7 @@ export class CarBody {
       const tc = Math.sign(gap) * cap;
       const te = engineTorque(this.engW);
       this.engW = Math.max(idleW * 0.5, this.engW + ((te - tc) / s.engineInertia) * dt);
-      w = axle(tc * ratio * eff + surge, s.wheelInertia);
+      w = axle(toAxle(tc * ratio * eff) + surge, s.wheelInertia);
       // Lock up when the speeds cross, if the wheels are quick enough for the engine to run in gear.
       if (cap > 0 && Math.sign(this.engW - w * ratio) !== Math.sign(gap) && w * ratio > idleW * 0.95) {
         this.locked = true;
@@ -371,6 +388,17 @@ export class CarBody {
       }
     }
     this.omega = w;
+    // Front drive (all-wheel drive cars): along each front wheel, within what its friction circle has left.
+    if (frontDrive !== 0) {
+      for (let i = 0; i < 2; i++) {
+        const py = i === 0 ? s.trackF / 2 : -s.trackF / 2;
+        const avail = frontMuX[i] * 0.95 * Math.sqrt(Math.max(0, 1 - (frontFy[i] / frontMuY[i]) ** 2));
+        const fx = clamp(frontDrive / R / 2, -avail, avail);
+        const cu = fx * cd, cv = fx * sd;
+        Fu += cu; Fv += cv;
+        Tq += s.a * cv - py * cu;
+      }
+    }
     rearForces(w, rear);
     for (let j = 0; j < 2; j++) {
       const py = j === 0 ? s.trackR / 2 : -s.trackR / 2;

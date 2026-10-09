@@ -201,3 +201,21 @@ export class SkidMarks {
     this.dirty = false;
   }
 }
+
+// Soft round glow used for light pools and the car's underglow. Shared and never disposed.
+let radialTex = null;
+export function radialTexture() {
+  if (radialTex) return radialTex;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const g = cv.getContext('2d');
+  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 128, 128);
+  radialTex = new THREE.CanvasTexture(cv);
+  radialTex.userData.shared = true;
+  return radialTex;
+}

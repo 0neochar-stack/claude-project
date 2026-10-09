@@ -17,7 +17,7 @@ function rng(seed) {
     return s / 4294967296;
   };
 }
-const rand = rng(1337);
+let rand = rng(1337); // reseeded by buildCity so the city is identical every time it is built
 const pick = (arr) => arr[Math.floor(rand() * arr.length)];
 const range = (a, b) => a + (b - a) * rand();
 
@@ -563,6 +563,7 @@ function makePylons(group) {
 }
 
 export function buildCity(scene, refl) {
+  rand = rng(1337);
   const group = new THREE.Group();
   const sky = makeSky();
   scene.add(sky);

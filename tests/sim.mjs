@@ -22,12 +22,23 @@ function run(car, seconds, input, onStep) {
 }
 
 const idle = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+// The gear a driver would pick for a speed: engine nearest 62% of the redline.
+function gearFor(car, speed) {
+  const s = car.spec;
+  let best = 1, bestErr = Infinity;
+  s.gears.forEach((g, i) => {
+    const rpm = (speed / s.wheelRadius) * g * s.finalDrive * 9.549;
+    const err = Math.abs(rpm - s.redline * 0.62);
+    if (rpm < s.redline * 0.92 && err < bestErr) { bestErr = err; best = i + 1; }
+  });
+  return best;
+}
 const spunOut = (c) => Math.abs(c.beta) > Math.PI / 2 || c.u < 1;
 
 // Handbrake into a left-hand drift at 70 km/h, then hold `steer` (+ is into the corner) and `throttle`.
 function drift(spec, steer, throttle, seconds = 7) {
   const car = new CarBody(spec());
-  car.launch(70 / 3.6, 3);
+  car.launch(70 / 3.6, gearFor(car, 70 / 3.6));
   const betas = [];
   let spun = false;
   run(car, seconds, (t) => (t < 0.45 ? { throttle: 0.4, brake: 0, steer: 1, handbrake: true } : { ...idle, throttle, steer }), (t, c) => {
@@ -64,7 +75,7 @@ function suite(tag, spec) {
   }
   {
     const car = new CarBody(spec());
-    car.launch(70 / 3.6, 3);
+    car.launch(70 / 3.6, gearFor(car, 70 / 3.6));
     let ay = 0;
     run(car, 4, (t, c) => ({ ...idle, throttle: 0.15, steer: 0.6 }), (t, c) => { if (t > 1.5) ay = Math.max(ay, Math.abs(c.ay)); });
     check(`${tag} cornering grip`, ay / 9.81 > 0.75 && ay / 9.81 < 1.3, `${(ay / 9.81).toFixed(2)} g`);
@@ -87,7 +98,7 @@ function suite(tag, spec) {
   // Transition: drift left, flick right, carry it into a right-hand drift.
   {
     const car = new CarBody(spec());
-    car.launch(70 / 3.6, 3);
+    car.launch(70 / 3.6, gearFor(car, 70 / 3.6));
     let spun = false, before = 0;
     run(car, 8, (t) => (t < 0.45 ? { throttle: 0.4, brake: 0, steer: 1, handbrake: true } : t < 3.5 ? { ...idle, throttle: 0.85, steer: 0.5 } : { ...idle, throttle: t < 4 ? 0.3 : 0.9, steer: -0.6 }),
       (t, c) => { if (spunOut(c)) spun = true; if (Math.abs(t - 3) < DT) before = c.beta; });
@@ -124,7 +135,7 @@ for (const c of CARS) {
   const corner = (kick) => {
     const car = new CarBody(buildSpec(c.id));
     car.autoGear = false;
-    car.launch(100 / 3.6, 4);
+    car.launch(90 / 3.6, gearFor(car, 90 / 3.6));
     let maxBeta = 0;
     run(car, 2.5, (t) => ({ throttle: t > 0.4 ? 0.7 : 0.3, brake: 0, steer: 0.15, handbrake: false, clutch: kick && t > 0.4 && t < 0.7 }),
       (t, car) => { if (t > 0.3) maxBeta = Math.max(maxBeta, Math.abs(car.beta)); });
@@ -134,22 +145,25 @@ for (const c of CARS) {
   check(`[${c.id}] clutch kick throws it sideways`, plain < 8 && kicked > 20, `${plain.toFixed(1)} deg without, ${kicked.toFixed(1)} deg with`);
 }
 
-// Assists off: a quick driver who balances throttle and counter-steer (0.12 s reactions) can hold a drift.
+// Assists off: a quick driver who balances throttle and counter-steer (0.12 s reactions) can hold a drift,
+// clutch-kicking to keep it alive when the angle fades, as drivers do in lower-powered cars.
 for (const c of CARS) {
   const car = new CarBody(buildSpec(c.id));
   car.assist = 0;
-  car.launch(70 / 3.6, 3);
+  car.launch(70 / 3.6, gearFor(car, 70 / 3.6));
   const hist = [], betas = [];
   const delay = Math.round(0.12 / DT);
-  let spun = false;
+  let spun = false, kickUntil = -1, lastKick = -9;
   run(car, 12, (t, k) => {
+    if (t > 0.45 && t > kickUntil && Math.abs(hist[hist.length - 1 - delay]?.beta ?? 1) < 0.22 && t - lastKick > 1.2) { kickUntil = t + 0.25; lastKick = t; }
+    const kicking = t <= kickUntil;
     const s = k.spec;
     hist.push({ travel: k.u > 2 ? Math.atan2(k.v + s.a * k.r, k.u) : 0, beta: k.beta });
     const o = hist[Math.max(0, hist.length - 1 - delay)], p = hist[Math.max(0, hist.length - 7 - delay)];
     const side = -Math.sign(o.beta) || 1;
     const err = 0.6 - Math.abs(o.beta), rate = (Math.abs(o.beta) - Math.abs(p.beta)) / (6 * DT);
     if (t < 0.45) return { throttle: 0.4, brake: 0, steer: 1, handbrake: true };
-    return { throttle: clamp(0.55 + 1.2 * err - 0.25 * rate, 0, 1), brake: 0, handbrake: false,
+    return { throttle: kicking ? 1 : clamp(0.55 + 1.2 * err - 0.25 * rate, 0, 1), brake: 0, handbrake: false, clutch: kicking,
       steer: clamp((o.travel + side * clamp(0.25 * err - 0.12 * rate, -0.3, 0.3)) / s.maxSteer, -1, 1) };
   }, (t, k) => { if (t > 2) betas.push(Math.abs(k.beta)); if (spunOut(k)) spun = true; });
   const avg = deg(betas.reduce((a, b) => a + b, 0) / betas.length);
