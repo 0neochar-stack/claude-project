@@ -67,7 +67,13 @@ they need the author's name in the game's credits if they ship.
 | props/traffic_barrier.glb | "Traffic Barrier" by Quaternius | 364 triangles |
 | props/bus_stop_sign.glb | "Bus stop sign" by dook (**credit**) | 1.5k triangles |
 | buildings/big_building.glb | "Big Building" by Quaternius | 7k triangles |
-| buildings/large_building_kenney.glb | "Large Building" by Kenney | 2.4k triangles |
+| buildings/large_building_kenney_a.glb | "Large Building" by Kenney | 2.4k triangles |
 | buildings/tron_cityscape.glb | "troncityscape1_FV7" by Fragmastre TV (**credit**) | highrise, 82k triangles, needs simplifying |
 | roads/road_kit_kenney.glb | "Modular Road Kit" by Kenney | 43 road and tile pieces, 11.8k triangles |
 | props/hydrant_b.glb | "Fire Hydrant" by Poly by Google (**credit**) | 740 triangles, textured |
+| castle/castle_fortress.glb | "Castle Fortress" by Quaternius | 9.8k triangles |
+| castle/bell_tower.glb | "Bell Tower" by Quaternius | 11.7k triangles |
+| buildings/skyscraper_kenney.glb | "Skyscraper" by Kenney | 1.6k triangles |
+| buildings/large_building_kenney_b.glb | "Large Building" by Kenney | 950 triangles |
+| buildings/building_red_corner.glb | "Building Red Corner" by J-Toastie (**credit**) | 2.9k triangles |
+| buildings/building_red.glb | "Building Red" by J-Toastie (**credit**) | 2.3k triangles |
