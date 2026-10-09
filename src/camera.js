@@ -24,6 +24,17 @@ export class CameraRig {
     this.headX = 0;
     this.headY = 0;
     this.fresh = true;
+    // Free look (GTA style): offsets from the normal view, eased back once you stop looking.
+    this.lookYaw = 0;
+    this.lookPitch = 0;
+    this.lookIdle = 99;
+  }
+
+  // Adds to the free-look offsets (radians). Yaw wraps all the way round; pitch is limited.
+  addLook(dYaw, dPitch) {
+    this.lookYaw = Math.atan2(Math.sin(this.lookYaw + dYaw), Math.cos(this.lookYaw + dYaw));
+    this.lookPitch = THREE.MathUtils.clamp(this.lookPitch + dPitch, -0.35, 0.7);
+    this.lookIdle = 0;
   }
 
   get id() { return CAMERAS[this.mode].id; }
@@ -66,6 +77,13 @@ export class CameraRig {
 
   update(dt, car, view, world, ground, playing) {
     const cam = this.camera;
+    // After a moment without input the view swings back behind the car.
+    this.lookIdle += dt;
+    if (this.lookIdle > 1.2) {
+      const k = 1 - Math.exp(-dt * 3);
+      this.lookYaw -= this.lookYaw * k;
+      this.lookPitch -= this.lookPitch * k;
+    }
     const free = window.__cdFreeCam; // debug: park the camera anywhere
     if (free) {
       cam.position.set(...free.pos);
@@ -93,7 +111,9 @@ export class CameraRig {
       }
       // Look along the body, with the head turning a touch toward where the car is travelling in a slide.
       const lookYaw = car.speed > 3 ? THREE.MathUtils.clamp(Math.atan2(Math.sin(Math.atan2(car.vx, car.vz) - car.h), Math.cos(Math.atan2(car.vx, car.vz) - car.h)) * 0.35, -0.5, 0.5) : 0;
-      v2.set(Math.sin(lookYaw) * 10, id === 'cockpit' ? 0.75 : -0.9, Math.cos(lookYaw) * 10);
+      // Head turn: free look swings up to about 140 degrees either way and tilts up and down.
+      const turn = lookYaw + THREE.MathUtils.clamp(this.lookYaw, -2.4, 2.4);
+      v2.set(Math.sin(turn) * 10, (id === 'cockpit' ? 0.75 : -0.9) - this.lookPitch * 8, Math.cos(turn) * 10);
       view.body.localToWorld(v2);
       up.set(0, 1, 0).applyQuaternion(view.body.getWorldQuaternion(new THREE.Quaternion()));
       cam.up.copy(up);
@@ -116,14 +136,17 @@ export class CameraRig {
     const far = id === 'far';
     const dist = (far ? 8.8 : 6.0) + Math.min(car.speed, 50) * 0.028;
     const height = (far ? 3.2 : 2.1) + gy;
-    v1.set(car.x - Math.sin(this.yaw) * dist, height, car.z - Math.cos(this.yaw) * dist);
+    // Free look orbits the camera round the car and up or down.
+    const oy = this.yaw + this.lookYaw, op = this.lookPitch;
+    const flat = dist * Math.cos(op * 0.9);
+    v1.set(car.x - Math.sin(oy) * flat, height + Math.sin(op * 0.9) * dist, car.z - Math.cos(oy) * flat);
     const clear = this.avoid(v1, car, world);
     v1.y += (1 - clear) * 1.6;
     if (this.fresh) { this.pos.copy(v1); this.fresh = false; }
     this.pos.lerp(v1, 1 - Math.exp(-dt * 10));
     this.avoid(this.pos, car, world);
     cam.position.copy(this.pos);
-    this.look.set(car.x + Math.sin(this.yaw) * 3, gy + 1.0, car.z + Math.cos(this.yaw) * 3);
+    this.look.set(car.x + Math.sin(oy) * 3, gy + 1.0, car.z + Math.cos(oy) * 3);
     cam.lookAt(this.look);
     this.lean = THREE.MathUtils.damp(this.lean, THREE.MathUtils.clamp(-car.r * car.u * 0.0018, -0.035, 0.035), 4, dt);
     cam.rotateZ(this.lean);

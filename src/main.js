@@ -156,6 +156,14 @@ function dropP2() {
   input.split = false;
   resize();
 }
+function startSplit(at) {
+  if (!p2) p2 = makeP2();
+  document.body.classList.add('is-split');
+  $('hud2').hidden = false;
+  input.split = true;
+  placeP2(at);
+  resize();
+}
 // Put player two alongside player one.
 function placeP2(at) {
   if (!p2) return;
@@ -263,13 +271,8 @@ function startDriving(at) {
   screens.set(null);
   car.reset(at.x, at.z, at.heading);
   if (splitOn()) {
-    if (!p2) p2 = makeP2();
-    document.body.classList.add('is-split');
-    $('hud2').hidden = false;
-    input.split = true;
-    placeP2(at);
-    resize();
-    if (input.padCount < 2) hud.toast('Connect a second controller for player 2');
+    startSplit(at);
+    if (!input.hasPlayer2) hud.toast('Player 2: press A on the second controller');
   } else dropP2();
   car.spec = profile.spec();
   score.chain = 0;
@@ -294,6 +297,7 @@ function enterDrive() {
 
 function pause() {
   if (state !== 'drive') return;
+  if (document.pointerLockElement) document.exitPointerLock();
   state = 'pause';
   $('touch').hidden = true;
   $('pause-place').textContent = world.placeInfo(car);
@@ -355,6 +359,23 @@ addEventListener('wheel', (e) => {
   orbit.zoom = Math.max(0.55, Math.min(1.6, orbit.zoom * (1 + Math.sign(e.deltaY) * 0.08)));
   orbit.idle = 0;
 }, { passive: true });
+
+// ---------- free look while driving ----------
+// Drag on the game with the mouse, or click it to capture the mouse (Esc releases) and just move it.
+let lookDrag = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (state !== 'drive') return;
+  lookDrag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  if (e.pointerType === 'mouse' && !document.pointerLockElement) canvas.requestPointerLock?.()?.catch?.(() => {});
+});
+addEventListener('pointermove', (e) => {
+  if (state !== 'drive') return;
+  if (document.pointerLockElement === canvas) { rig.addLook(-e.movementX * 0.0045, -e.movementY * 0.003); return; }
+  if (!lookDrag || e.pointerId !== lookDrag.id) return;
+  rig.addLook(-(e.clientX - lookDrag.x) * 0.006, -(e.clientY - lookDrag.y) * 0.004);
+  lookDrag.x = e.clientX; lookDrag.y = e.clientY;
+});
+addEventListener('pointerup', () => { lookDrag = null; });
 
 // ---------- menus ----------
 const screens = new Screens();
@@ -454,7 +475,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'players') {
     settings.set('players', splitOn() ? 1 : 2);
     renderMain();
-    hud.toast(splitOn() ? `Split screen on · ${input.padCount >= 2 ? 'two controllers ready' : 'player 2 needs a second controller'}` : 'Single player');
+    hud.toast(splitOn() ? `Split screen on · ${input.hasPlayer2 ? 'player 2 is ready' : 'player 2: press A on the second controller'}` : 'Single player');
   }
   else if (act === 'close-settings') screens.back();
 });
@@ -774,6 +795,10 @@ function frame(now) {
     world.update(clock, dt, { camera, car, playing: driving, carView, hud, score, profile, sound, scene, renderer, applyEnv: () => applyEnv(world) });
     particles.update(dt);
     skids.update(clock);
+    // Free look: right stick per player, plus the mouse for player one.
+    const lk = input.look(0);
+    if (lk.x || lk.y) rig.addLook(-lk.x * dt * 2.6, -lk.y * dt * 1.4);
+    if (p2) { const l2 = input.look(1); if (l2.x || l2.y) p2.rig.addLook(-l2.x * dt * 2.6, -l2.y * dt * 1.4); }
     rig.update(dt, car, carView, world, ground, driving);
     if (driving) hud.update(dt, { car, score, profile, settings, world });
     if (p2) {
@@ -847,6 +872,16 @@ input.onPadStatus = (status, id = '') => {
   if (status === 'connected') { line.textContent = `${name} connected`; hud.toast(`${name} connected`); }
   else if (status === 'disconnected') { line.textContent = 'Controller disconnected'; hud.toast('Controller disconnected'); }
   else { line.textContent = 'This view blocks controllers. Open the game in its own browser tab to use one.'; $('pad-note').hidden = false; }
+};
+// A second controller pressing A or Start joins as player two: straight into split screen if driving.
+input.onJoin = (id) => {
+  const name = id.replace(/\s*\(.*$/, '').slice(0, 30) || 'Controller';
+  settings.set('players', 2);
+  renderMain();
+  if (state === 'drive' && world && !p2) {
+    startSplit({ x: car.x, z: car.z, heading: car.h });
+    hud.toast(`Player 2 joined (${name})`);
+  } else hud.toast(`Player 2 ready (${name}) · pick a world`);
 };
 addEventListener('pointerdown', () => sound.start(), { once: true });
 addEventListener('keydown', () => sound.start(), { once: true });

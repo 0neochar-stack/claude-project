@@ -21,6 +21,8 @@ export class Input {
     this.actions2 = [];
     this.split = false;
     this.padOrder = [];
+    this.slots = [null, null]; // pad index seated as player one and player two
+    this.onJoin = null;
     this.padState = new Map();
     // Poll pads between frames too, so presses are caught even when frames are slow.
     setInterval(() => this.readPads(null), 16);
@@ -30,6 +32,7 @@ export class Input {
     addEventListener('gamepadconnected', (e) => this.onPadStatus?.('connected', e.gamepad.id));
     addEventListener('gamepaddisconnected', (e) => {
       this.padState.delete(e.gamepad.index);
+      this.slots = this.slots.map((i) => (i === e.gamepad.index ? null : i));
       this.onPadStatus?.('disconnected', e.gamepad.id);
     });
     this.kbSteer = 0;
@@ -138,8 +141,21 @@ export class Input {
       st.look.x = rs(pad.mapping === 'standard' ? 2 : 3); st.look.y = rs(pad.mapping === 'standard' ? 3 : 4);
       if (Math.abs(steer) > 0 || gas > 0.05 || brake > 0.05 || btn(0) > 0.5) this.lastPad = pad;
 
-      const player2 = this.split && this.padOrder.length > 1 && pad.index === this.padOrder[1];
-      const out = player2 && !this.menuMode ? this.actions2 : this.actions;
+      // Seats: the first pad to do anything is player one; a different pad pressing A or Start joins as
+      // player two. A pad that only ever mirrors player one's buttons (the same controller listed twice)
+      // or never does anything (a phantom device) never gets a seat.
+      const pressedKey = pad.buttons.map((b, i) => (btn(i) > 0.5 ? i : '')).join(',').replace(/,+/g, ',');
+      const active = /\d/.test(pressedKey) || Math.abs(axis(0)) > 0.5 || gas > 0.3;
+      if (this.slots[0] === null && active) this.slots[0] = pad.index;
+      if (this.slots[1] === null && pad.index !== this.slots[0] && this.slots[0] !== null && (btn(0) > 0.5 || btn(9) > 0.5) && !st.prev[0] && !st.prev[9]) {
+        const p1 = this.padState.get(this.slots[0]);
+        if (!p1 || p1.pressedKey !== pressedKey) { this.slots[1] = pad.index; this.onJoin?.(pad.id); }
+      }
+      st.pressedKey = pressedKey;
+      const isP1 = pad.index === this.slots[0], isP2 = pad.index === this.slots[1];
+      // In split screen only seated pads drive; player two's buttons go to their own queue.
+      if (this.split && !this.menuMode && !isP1 && !isP2) { for (let i = 0; i < pad.buttons.length; i++) st.prev[i] = btn(i) > 0.5; continue; }
+      const out = this.split && isP2 && !this.menuMode ? this.actions2 : this.actions;
       // In menus the D-pad and left stick move focus, A confirms, B goes back and the bumpers flip tabs.
       const edges = this.menuMode
         ? { 0: 'confirm', 1: 'back', 9: 'help', 4: 'tabPrev', 5: 'tabNext' }
@@ -166,7 +182,7 @@ export class Input {
     if (!s) return;
     // Merge into player one's controls.
     for (const idx of this.padOrder) {
-      if (this.split && this.padOrder.length > 1 && idx !== this.padOrder[0]) continue;
+      if (this.split && idx !== this.slots[0]) continue;
       const an = this.padState.get(idx).analog;
       if (Math.abs(an.steer) > Math.abs(s.steer)) s.steer = an.steer;
       s.throttle = Math.max(s.throttle, an.throttle);
@@ -178,19 +194,26 @@ export class Input {
 
   // Player two's controls (split screen): the second connected pad, or nothing.
   poll2() {
-    const idx = this.padOrder?.[1];
+    const idx = this.slots[1];
     const st = idx !== undefined ? this.padState.get(idx) : null;
     return st ? st.analog : { throttle: 0, brake: 0, steer: 0, handbrake: false, clutch: false };
   }
 
-  // Right-stick look from any pad (strongest wins).
-  look() {
+  // Right-stick look. Slot 0 is player one (every pad, or the first in split screen), slot 1 player two.
+  look(slot = 0) {
     let x = 0, y = 0;
-    for (const st of this.padState.values()) { if (Math.abs(st.look.x) > Math.abs(x)) x = st.look.x; if (Math.abs(st.look.y) > Math.abs(y)) y = st.look.y; }
+    this.padOrder.forEach((idx) => {
+      if (this.split ? idx !== this.slots[slot] : slot === 1) return;
+      const st = this.padState.get(idx);
+      if (!st) return;
+      if (Math.abs(st.look.x) > Math.abs(x)) x = st.look.x;
+      if (Math.abs(st.look.y) > Math.abs(y)) y = st.look.y;
+    });
     return { x, y };
   }
 
   get padCount() { return this.padOrder?.length || 0; }
+  get hasPlayer2() { return this.slots[1] !== null; }
 
   takeActions2() {
     const a = this.actions2;
