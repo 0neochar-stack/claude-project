@@ -260,12 +260,27 @@ function bottomAt(z) {
   return yb;
 }
 
+// How open the cabin is at section z: 1 inside the glasshouse (a tub you can see down into, with door
+// tops, inner door walls and a floor), easing to 0 at the firewall and the rear bulkhead.
+const CABIN_FLOOR = 0.42;
+function cabinOpen(z) {
+  const z0 = P.c[0] + 0.12, z1 = Math.min(P.a[0] - 0.08, 0.5);
+  const ramp = 0.14;
+  const t = Math.min((z - z0) / ramp, (z1 - z) / ramp);
+  return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+}
+
 function bodySection(z) {
   const hw = halfWidth(z), bulge = flare(z), yb = bottomAt(z), sh = shoulder(z), tc = centreTop(z);
   const mid = yb + (sh - yb) * 0.45;
+  // The top of the section folds down into the cabin where it is open; closed, the extra points sit on
+  // the deck so the outline is unchanged.
+  const w = cabinOpen(z), L = (a, b) => [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w];
+  const floor = Math.max(CABIN_FLOOR, yb + 0.06);
   return mirrorHalf([
     [0, yb], [hw * 0.55, yb], [hw - 0.04, yb + 0.015], [hw + bulge, Math.min(mid, sh - 0.1)],
-    [hw + bulge * 0.7 - 0.015, sh - 0.07], [hw - 0.12, sh], [hw * 0.45, tc], [0, tc],
+    [hw + bulge * 0.7 - 0.015, sh - 0.07], [hw - 0.12, sh],
+    L([hw * 0.45, tc], [hw - 0.19, sh - 0.02]), L([hw * 0.2, tc], [hw - 0.2, floor]), L([0, tc], [0, floor]),
   ]);
 }
 
@@ -868,15 +883,23 @@ export function buildCar(envMap, radial, look = {}) {
   const fz = glassSection(0.2);
   body.add(box(1.36, 0.12, 0.36, cabin, 0, fz.base - 0.07, 0.3));
   body.add(box(1.2, 0.22, 2.2, cabin, 0, 0.36, -0.7));
-  // Interior tub: dark trim laid over the body shell inside the glasshouse, so from the driver's seat the
-  // cabin reads as door cards and parcel shelf instead of the paint underneath.
+  // Interior: the body shell is open over the cabin (see cabinOpen); carpet on its floor and dark door
+  // cards on the inner walls, so from the driver's seat you look down at the seats, pedals and floor.
   {
-    const z0 = P.a[0] - 0.04, z1 = P.c[0] + 0.04, n = 10;
-    for (let k = 0; k < n; k++) {
-      const za = z0 + ((z1 - z0) * k) / n, zb = z0 + ((z1 - z0) * (k + 1)) / n, zm = (za + zb) / 2;
-      const gs = glassSection(zm);
-      const y = Math.max(gs.base, shoulder(zm), centreTop(zm)) + 0.014;
-      body.add(box(2 * (gs.hb - 0.02), 0.02, Math.abs(zb - za) + 0.01, cabin, 0, y, zm));
+    const z0 = P.c[0] + 0.2, z1 = Math.min(P.a[0] - 0.08, 0.5) - 0.12;
+    const zc = (z0 + z1) / 2, len = z1 - z0;
+    const inner = halfWidth(zc) - 0.2;
+    body.add(box(2 * inner - 0.02, 0.02, len, seatMat, 0, CABIN_FLOOR + 0.06, zc));
+    for (const side of [1, -1]) {
+      const card = box(0.025, shoulder(zc) - CABIN_FLOOR - 0.1, len - 0.1, cabin, side * (inner + 0.005), (shoulder(zc) + CABIN_FLOOR) / 2 + 0.02, zc);
+      body.add(card);
+      body.add(box(0.06, 0.03, len - 0.2, carbon, side * (inner - 0.01), shoulder(zc) - 0.18, zc)); // armrest
+    }
+    // Pedals under the dash on the driver's side.
+    for (const [k, px] of [[0, -0.12], [1, 0], [2, 0.1]]) {
+      const pedal = box(k === 2 ? 0.09 : 0.06, 0.1, 0.015, chrome, driverX + px, CABIN_FLOOR + 0.16, 0.26);
+      pedal.rotation.x = -0.5;
+      body.add(pedal);
     }
   }
   both((side) => {
