@@ -56,3 +56,8 @@ they need the author's name in the game's credits if they ship.
 | props/trashcan.glb | "Trashcan" by Quaternius | 739 triangles |
 | props/trash_bag.glb | "trash bag grey" by Jens Kull (**credit**) | 182 triangles |
 | props/crate.glb | "Crate" by Quaternius | 784 triangles |
+| props/traffic_light_a.glb | "Traffic Light" by Quaternius | 1.4k triangles |
+| props/traffic_light_b.glb | "Traffic light" by Poly by Google (**credit**) | 1.1k triangles |
+| props/stop_sign.glb | "Stop sign" by Poly by Google (**credit**) | 236 triangles |
+| props/box.glb | "Box" by Kay Lousberg | 32 triangles |
+| props/mailbox.glb | "Mailbox" by J-Toastie (**credit**) | 328 triangles |
