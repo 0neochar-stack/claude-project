@@ -115,6 +115,7 @@ export class CarBody {
       wheelSpinAngle: 0, clutch: false, kick: 0, limiterHold: 0,
       boost: 0, scBoost: 0, boostBar: 0, bovEvent: 0, lastThrottleIn: 0,
       omega: 0, engW: this.spec.idleRpm / RPM, locked: false,
+      grip: 1, roughness: 0, gx: 0, gz: 0,
     });
     this.load.fill(0);
     this.slip.fill(0);
@@ -226,7 +227,9 @@ export class CarBody {
     load[1] = Math.max(150, nf - dx + dyf); // FR
     load[2] = Math.max(150, nr + dx - dyr); // RL
     load[3] = Math.max(150, nr + dx + dyr); // RR
-    const muScale = (N) => 1 - s.loadSens * (N / N0 - 1);
+    // Surface: the world sets grip (1 on tarmac, less on dirt or grass) and extra rolling drag off the road.
+    const surf = this.grip;
+    const muScale = (N) => surf * (1 - s.loadSens * (N / N0 - 1));
 
     // ---------- front tyres (free rolling, ABS brakes) ----------
     let Fu = 0, Fv = 0, Tq = 0;
@@ -436,7 +439,10 @@ export class CarBody {
     let Fz = Fu * ch - Fv * sh;
     Fx -= this.vx * (s.drag * speed + s.rolling);
     Fz -= this.vz * (s.drag * speed + s.rolling);
-    if (speed < 0.6 && throttle < 0.05) { Fx -= this.vx * m * 4; Fz -= this.vz * m * 4; }
+    // Slope: the world sets the downhill pull of gravity (m/s², world frame) and any off-road drag.
+    Fx += m * this.gx - this.vx * m * this.roughness;
+    Fz += m * this.gz - this.vz * m * this.roughness;
+    if (speed < 0.6 && throttle < 0.05 && Math.hypot(this.gx, this.gz) < 1.2) { Fx -= this.vx * m * 4; Fz -= this.vz * m * 4; }
 
     this.vx += (Fx / m) * dt;
     this.vz += (Fz / m) * dt;

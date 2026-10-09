@@ -62,6 +62,8 @@ export function createNeonWorld({ preset, sound, particles }) {
       bloom: { strength: 0.85, radius: 0.55, threshold: 0.82 },
       far: 1800,
       headlights: true,
+      rain: 1,
+      wet: 1,
     },
     collide,
     nearestRoad,
@@ -71,6 +73,7 @@ export function createNeonWorld({ preset, sound, particles }) {
       return false;
     },
     groundAt: () => 0,
+    flat: true,
     drawMinimap(g, car, W) {
       const s = W / 2 / 150;
       const ch = Math.cos(car.h), sh = Math.sin(car.h);

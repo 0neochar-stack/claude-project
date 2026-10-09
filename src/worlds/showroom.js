@@ -34,7 +34,7 @@ export function createShowroom() {
   const root = new THREE.Group();
   const floor = new THREE.Mesh(
     new THREE.CircleGeometry(30, 64).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.32, metalness: 0.55 }),
+    new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.45, metalness: 0.4 }),
   );
   root.add(floor);
   // Glowing turntable edge.
@@ -44,7 +44,7 @@ export function createShowroom() {
   root.add(ring);
   // Curved backdrop.
   const wall = new THREE.Mesh(
-    new THREE.CylinderGeometry(28, 28, 18, 64, 1, true, Math.PI * 0.15, Math.PI * 1.7),
+    new THREE.CylinderGeometry(28, 28, 18, 64, 1, true),
     new THREE.MeshStandardMaterial({ color: 0x0f0b18, roughness: 0.9, side: THREE.BackSide }),
   );
   wall.position.y = 9;
@@ -64,11 +64,11 @@ export function createShowroom() {
   root.add(halo);
 
   root.add(new THREE.HemisphereLight(0x8a7cff, 0x120a18, 0.6));
-  const key = new THREE.SpotLight(0xffffff, 900, 40, 0.5, 0.6, 1.6);
+  const key = new THREE.SpotLight(0xffffff, 320, 40, 0.5, 0.6, 1.6);
   key.position.set(6, 9, 7);
-  const rimA = new THREE.SpotLight(0xff3fb4, 700, 40, 0.55, 0.7, 1.6);
+  const rimA = new THREE.SpotLight(0xff3fb4, 220, 40, 0.55, 0.7, 1.6);
   rimA.position.set(-8, 5, -6);
-  const rimB = new THREE.SpotLight(0x33f0ff, 700, 40, 0.55, 0.7, 1.6);
+  const rimB = new THREE.SpotLight(0x33f0ff, 220, 40, 0.55, 0.7, 1.6);
   rimB.position.set(8, 4, -7);
   for (const l of [key, rimA, rimB]) { l.target.position.set(0, 0.6, 0); root.add(l, l.target); }
 
@@ -79,11 +79,14 @@ export function createShowroom() {
     env: {
       background: new THREE.Color(0x07060b),
       fog: new THREE.Fog(0x07060b, 20, 45),
-      exposure: 1.1,
-      bloom: { strength: 0.7, radius: 0.5, threshold: 0.85 },
+      exposure: 0.95,
+      bloom: { strength: 0.45, radius: 0.45, threshold: 0.92 },
       far: 120,
       headlights: true,
     },
+    flat: true,
+    groundAt: () => 0,
+    blocked: () => false,
     // Camera for the menus: a slow orbit, closer and lower in Customize.
     camera(t, mode, cam) {
       const near = mode === 'customize';

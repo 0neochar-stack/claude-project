@@ -11,6 +11,18 @@ export const PAINTS = [
   { name: 'Racing Lime', color: 0x7ccf1f },
   { name: 'Gunmetal', color: 0x2a2e36 },
   { name: 'Sunset Orange', color: 0xe0561b },
+  { name: 'Burnt Copper', color: 0x9c4a1c },
+  { name: 'Graphite', color: 0x3b3e44 },
+  { name: 'Candy Red', color: 0xa3101c },
+  { name: 'Sky Blue', color: 0x3f86c9 },
+  { name: 'Silver Frost', color: 0xb9bec6 },
+  { name: 'Bordeaux', color: 0x4e1420 },
+  { name: 'Glacier White', color: 0xeef0f2 },
+  { name: 'Midnight Black', color: 0x0c0c10 },
+  { name: 'Lime Pearl', color: 0xa8d61e },
+  { name: 'Bayou Teal', color: 0x1f6f6a },
+  { name: 'Matte Grey', color: 0x5d6066 },
+  { name: 'Sakura Pink', color: 0xe68aa8 },
 ];
 
 // Neon room captured into a PMREM so the clearcoat picks up pink and cyan streaks.
@@ -123,16 +135,120 @@ function box(sx, sy, sz, mat, x, y, z) {
   return m;
 }
 
-// ---------- body profile ----------
-// A low widebody coupe: long hood, fastback roof, ducktail, flared arches. z is forward, +x is the car's left.
+// ---------- body profiles ----------
+// Each car's silhouette: plan width, shoulder line, centre-line top, sill, roof lift over the shoulder, arch
+// flares, pillar positions, roof skin span and doors. z is forward, +x is the car's left. Overall size comes
+// from the car's look.scale.
 const WHEEL_R = 0.32;
 const ARCH_R = 0.39;
 const FRONT_Z = 1.28, REAR_Z = -1.34, TRACK = 0.82;
-const halfWidth = curve([[-2.26, 0.83], [-2.0, 0.89], [-1.34, 0.92], [-0.6, 0.89], [0.3, 0.88], [1.28, 0.91], [1.9, 0.87], [2.22, 0.76]]);
-const shoulder = curve([[-2.26, 0.84], [-1.95, 0.91], [-1.34, 0.89], [-0.5, 0.85], [0.5, 0.82], [1.28, 0.83], [1.9, 0.72], [2.22, 0.6]]);
-const centreTop = curve([[-2.26, 0.86], [-2.0, 0.93], [-1.6, 0.9], [-0.5, 0.86], [0.5, 0.82], [1.2, 0.76], [1.9, 0.66], [2.22, 0.56]]);
-const baseBottom = curve([[-2.26, 0.4], [-2.05, 0.25], [1.95, 0.22], [2.22, 0.3]]);
-const flare = (z) => 0.04 * Math.exp(-(((z - FRONT_Z) / 0.5) ** 2)) + 0.055 * Math.exp(-(((z - REAR_Z) / 0.55) ** 2));
+const BASE_HW = [[-2.26, 0.83], [-2.0, 0.89], [-1.34, 0.92], [-0.6, 0.89], [0.3, 0.88], [1.28, 0.91], [1.9, 0.87], [2.22, 0.76]];
+const STREET_HW = [[-2.26, 0.8], [-2.0, 0.86], [-1.34, 0.89], [-0.6, 0.87], [0.3, 0.86], [1.28, 0.88], [1.9, 0.84], [2.22, 0.73]];
+const STREET_BB = [[-2.26, 0.42], [-2.05, 0.28], [1.95, 0.25], [2.22, 0.32]];
+export const BODY_PROFILES = {
+  // Low widebody fastback with a ducktail (the original cars).
+  widebody: {
+    hw: BASE_HW,
+    sh: [[-2.26, 0.84], [-1.95, 0.91], [-1.34, 0.89], [-0.5, 0.85], [0.5, 0.82], [1.28, 0.83], [1.9, 0.72], [2.22, 0.6]],
+    tc: [[-2.26, 0.86], [-2.0, 0.93], [-1.6, 0.9], [-0.5, 0.86], [0.5, 0.82], [1.2, 0.76], [1.9, 0.66], [2.22, 0.56]],
+    bb: [[-2.26, 0.4], [-2.05, 0.25], [1.95, 0.22], [2.22, 0.3]],
+    roof: [[-1.8, 0], [-1.4, 0.24], [-1.0, 0.4], [-0.55, 0.42], [-0.2, 0.39], [0.25, 0.2], [0.62, 0]],
+    flare: [0.04, 0.055], a: [0.6, -0.18], b: -0.72, c: [-1.62, -1.1], skin: [-0.15, -1.15], doors: [[0.64, -0.7]],
+  },
+  // Two-seat coupe: long bonnet, dome roof, tall rear haunches, hatch.
+  z33: {
+    hw: STREET_HW,
+    sh: [[-2.26, 0.86], [-1.95, 0.93], [-1.34, 0.93], [-0.5, 0.84], [0.5, 0.8], [1.28, 0.81], [1.9, 0.7], [2.22, 0.58]],
+    tc: [[-2.26, 0.88], [-2.0, 0.95], [-1.6, 0.93], [-0.5, 0.86], [0.5, 0.8], [1.2, 0.74], [1.9, 0.64], [2.22, 0.54]],
+    bb: STREET_BB,
+    roof: [[-1.85, 0], [-1.5, 0.2], [-1.1, 0.37], [-0.6, 0.45], [-0.2, 0.43], [0.2, 0.24], [0.6, 0]],
+    flare: [0.03, 0.055], a: [0.58, -0.15], b: -0.62, c: [-1.72, -1.2], skin: [-0.1, -1.2], doors: [[0.64, -0.62]],
+  },
+  // Four-seat coupe: longer cabin, gentle fastback.
+  v35: {
+    hw: STREET_HW,
+    sh: [[-2.26, 0.84], [-1.95, 0.9], [-1.34, 0.89], [-0.5, 0.84], [0.5, 0.81], [1.28, 0.81], [1.9, 0.71], [2.22, 0.59]],
+    tc: [[-2.26, 0.86], [-2.0, 0.92], [-1.6, 0.9], [-0.5, 0.86], [0.5, 0.81], [1.2, 0.75], [1.9, 0.65], [2.22, 0.55]],
+    bb: STREET_BB,
+    roof: [[-1.8, 0], [-1.45, 0.24], [-1.0, 0.41], [-0.5, 0.44], [0, 0.41], [0.3, 0.21], [0.65, 0]],
+    flare: [0.02, 0.03], a: [0.62, -0.1], b: -0.7, c: [-1.62, -1.05], skin: [-0.05, -1.1], doors: [[0.66, -0.72]],
+  },
+  // Long, low, sleek modern coupe.
+  v37: {
+    hw: STREET_HW,
+    sh: [[-2.26, 0.83], [-1.95, 0.89], [-1.34, 0.88], [-0.5, 0.82], [0.5, 0.79], [1.28, 0.8], [1.9, 0.69], [2.22, 0.56]],
+    tc: [[-2.26, 0.85], [-2.0, 0.91], [-1.6, 0.89], [-0.5, 0.84], [0.5, 0.79], [1.2, 0.73], [1.9, 0.62], [2.22, 0.52]],
+    bb: STREET_BB,
+    roof: [[-1.85, 0], [-1.45, 0.2], [-1.0, 0.37], [-0.45, 0.4], [0, 0.37], [0.3, 0.2], [0.72, 0]],
+    flare: [0.02, 0.035], a: [0.7, -0.05], b: -0.68, c: [-1.66, -1.05], skin: [0, -1.1], doors: [[0.68, -0.7]],
+  },
+  // Compact notchback coupe with a short boot.
+  s15: {
+    hw: STREET_HW,
+    sh: [[-2.26, 0.84], [-1.95, 0.88], [-1.34, 0.87], [-0.5, 0.84], [0.5, 0.8], [1.28, 0.8], [1.9, 0.7], [2.22, 0.58]],
+    tc: [[-2.26, 0.86], [-2.0, 0.9], [-1.5, 0.89], [-0.5, 0.86], [0.5, 0.8], [1.2, 0.74], [1.9, 0.65], [2.22, 0.55]],
+    bb: STREET_BB,
+    roof: [[-1.4, 0], [-1.15, 0.2], [-0.85, 0.4], [-0.45, 0.43], [-0.1, 0.41], [0.25, 0.21], [0.62, 0]],
+    flare: [0.02, 0.03], a: [0.6, -0.12], b: -0.6, c: [-1.32, -0.95], skin: [-0.1, -0.9], doors: [[0.64, -0.62]],
+  },
+  // Boxier 90s notchback: flat roof, upright glass.
+  s13: {
+    hw: STREET_HW,
+    sh: [[-2.26, 0.85], [-1.95, 0.87], [-1.34, 0.87], [-0.5, 0.84], [0.5, 0.81], [1.28, 0.8], [1.9, 0.72], [2.22, 0.6]],
+    tc: [[-2.26, 0.86], [-2.0, 0.89], [-1.5, 0.89], [-0.5, 0.86], [0.5, 0.81], [1.2, 0.76], [1.9, 0.68], [2.22, 0.58]],
+    bb: STREET_BB,
+    roof: [[-1.34, 0], [-1.12, 0.24], [-0.85, 0.43], [-0.4, 0.45], [0, 0.44], [0.28, 0.22], [0.6, 0]],
+    flare: [0.015, 0.025], a: [0.58, -0.08], b: -0.6, c: [-1.28, -0.9], skin: [-0.05, -0.88], doors: [[0.62, -0.62]],
+  },
+  // Compact four-door sports sedan.
+  xe10: {
+    hw: STREET_HW,
+    sh: [[-2.26, 0.86], [-1.95, 0.89], [-1.34, 0.88], [-0.5, 0.85], [0.5, 0.82], [1.28, 0.82], [1.9, 0.72], [2.22, 0.6]],
+    tc: [[-2.26, 0.87], [-2.0, 0.91], [-1.5, 0.9], [-0.5, 0.87], [0.5, 0.82], [1.2, 0.76], [1.9, 0.67], [2.22, 0.57]],
+    bb: STREET_BB,
+    roof: [[-1.48, 0], [-1.22, 0.25], [-0.9, 0.45], [-0.3, 0.48], [0.1, 0.46], [0.36, 0.25], [0.7, 0]],
+    flare: [0.015, 0.02], a: [0.66, -0.0], b: -0.3, c: [-1.45, -1.0], skin: [0, -1.0], doors: [[0.68, -0.28], [-0.3, -1.18]],
+  },
+  // Smooth long grand-tourer coupe with a rounded boot.
+  z30: {
+    hw: STREET_HW,
+    sh: [[-2.26, 0.82], [-1.95, 0.87], [-1.34, 0.86], [-0.5, 0.83], [0.5, 0.79], [1.28, 0.78], [1.9, 0.68], [2.22, 0.56]],
+    tc: [[-2.26, 0.83], [-2.0, 0.88], [-1.5, 0.88], [-0.5, 0.85], [0.5, 0.79], [1.2, 0.72], [1.9, 0.62], [2.22, 0.52]],
+    bb: STREET_BB,
+    roof: [[-1.55, 0], [-1.28, 0.22], [-0.95, 0.38], [-0.5, 0.42], [0, 0.4], [0.3, 0.21], [0.66, 0]],
+    flare: [0.01, 0.02], a: [0.64, -0.05], b: -0.72, c: [-1.5, -1.0], skin: [-0.05, -1.0], doors: [[0.66, -0.74]],
+  },
+  // Modern coupe with a short boot.
+  b8: {
+    hw: STREET_HW,
+    sh: [[-2.26, 0.84], [-1.95, 0.9], [-1.34, 0.89], [-0.5, 0.84], [0.5, 0.81], [1.28, 0.81], [1.9, 0.71], [2.22, 0.58]],
+    tc: [[-2.26, 0.85], [-2.0, 0.91], [-1.5, 0.9], [-0.5, 0.86], [0.5, 0.81], [1.2, 0.75], [1.9, 0.65], [2.22, 0.54]],
+    bb: STREET_BB,
+    roof: [[-1.68, 0], [-1.36, 0.22], [-0.95, 0.4], [-0.45, 0.43], [0, 0.41], [0.35, 0.21], [0.7, 0]],
+    flare: [0.02, 0.025], a: [0.68, -0.02], b: -0.7, c: [-1.6, -1.05], skin: [0, -1.05], doors: [[0.68, -0.72]],
+  },
+  // Long, boxy four-door with a flat boot.
+  jzx: {
+    hw: STREET_HW,
+    sh: [[-2.26, 0.86], [-1.95, 0.88], [-1.34, 0.88], [-0.5, 0.85], [0.5, 0.82], [1.28, 0.81], [1.9, 0.73], [2.22, 0.61]],
+    tc: [[-2.26, 0.87], [-2.0, 0.9], [-1.5, 0.9], [-0.5, 0.87], [0.5, 0.82], [1.2, 0.77], [1.9, 0.69], [2.22, 0.59]],
+    bb: STREET_BB,
+    roof: [[-1.44, 0], [-1.2, 0.25], [-0.9, 0.46], [-0.3, 0.48], [0.1, 0.47], [0.36, 0.25], [0.68, 0]],
+    flare: [0.015, 0.02], a: [0.66, 0.0], b: -0.3, c: [-1.42, -1.0], skin: [0, -1.0], doors: [[0.68, -0.28], [-0.3, -1.16]],
+  },
+};
+let P = BODY_PROFILES.widebody;
+let halfWidth, shoulder, centreTop, baseBottom, roofTop;
+function applyProfile(name) {
+  P = BODY_PROFILES[name] || BODY_PROFILES.widebody;
+  halfWidth = curve(P.hw);
+  shoulder = curve(P.sh);
+  centreTop = curve(P.tc);
+  baseBottom = curve(P.bb);
+  roofTop = curve(P.roof);
+}
+applyProfile('widebody');
+const flare = (z) => P.flare[0] * Math.exp(-(((z - FRONT_Z) / 0.5) ** 2)) + P.flare[1] * Math.exp(-(((z - REAR_Z) / 0.55) ** 2));
 
 function bottomAt(z) {
   let yb = baseBottom(z);
@@ -152,8 +268,7 @@ function bodySection(z) {
   ]);
 }
 
-// Greenhouse: windscreen from z 0.62 back to the fastback tail at -1.8.
-const roofTop = curve([[-1.8, 0], [-1.4, 0.24], [-1.0, 0.4], [-0.55, 0.42], [-0.2, 0.39], [0.25, 0.2], [0.62, 0]]);
+// Greenhouse: the roof lift curve of the profile, from the windscreen base back to the rear glass.
 function glassSection(z) {
   const base = Math.max(shoulder(z), centreTop(z)) - 0.03;
   const lift = Math.max(roofTop(z), 0.002);
@@ -385,13 +500,15 @@ function makeWheel(parts, side, front, style = 'six') {
   const keep = new Set();
   spin.traverse((o) => o.isMesh && keep.add(o));
   mergeByMaterial(mount, keep);
-  return { pivot, spin, dir: side > 0 ? 1 : -1 };
+  return { pivot, mount, spin, dir: side > 0 ? 1 : -1 };
 }
 
 // ---------- the car ----------
 // look: { scale: [width, height, length], wing: 'duck' | 'gt' | 'none', paint, neon, rims } (indices into the palettes).
 export function buildCar(envMap, radial, look = {}) {
+  applyProfile(look.body);
   const [sx, sy, sz] = look.scale || [1, 1, 1];
+  const driverX = look.lhd ? 0.36 : -0.36; // +x is the car's left
   const root = new THREE.Group();
   const body = new THREE.Group(); // rolls and pitches on the suspension
   body.scale.set(sx, sy, sz);
@@ -425,15 +542,16 @@ export function buildCar(envMap, radial, look = {}) {
 
   // Glass cabin, then a painted roof skin and pillars over it.
   const gz = [], gr = [];
+  const g0 = P.roof[P.roof.length - 1][0], g1 = P.roof[0][0];
   for (let i = 0; i <= 36; i++) {
-    const z = 0.62 - (2.42 * i) / 36;
+    const z = g0 - ((g0 - g1) * i) / 36;
     gz.unshift(z);
     gr.unshift(smoothRing(glassSection(z).ring, 3));
   }
   body.add(new THREE.Mesh(loft(gr, gz), glass));
   const rz = [], rr = [];
   for (let i = 0; i <= 16; i++) {
-    const z = -0.15 - (1.0 * i) / 16;
+    const z = P.skin[0] - ((P.skin[0] - P.skin[1]) * i) / 16;
     const s = glassSection(z);
     rz.unshift(z);
     rr.unshift(smoothRing(mirrorHalf([[0, s.top - 0.03], [s.ht * 0.92, s.top - 0.035], [s.ht * 0.96, s.top - 0.01], [s.ht * 0.5, s.top + 0.012], [0, s.top + 0.014]]), 3));
@@ -441,12 +559,12 @@ export function buildCar(envMap, radial, look = {}) {
   body.add(new THREE.Mesh(loft(rr, rz), paint));
   const at = (z, f) => { const s = glassSection(z); return [s.hb + (s.ht - s.hb) * f, s.base + (s.top - s.base) * f]; };
   for (const side of [1, -1]) {
-    const [ax0, ay0] = at(0.6, 0), [ax1, ay1] = at(-0.18, 1);
-    body.add(rod([side * (ax0 + 0.005), ay0, 0.6], [side * (ax1 + 0.01), ay1, -0.18], 0.028, paint));
-    const [bx0, by0] = at(-0.72, 0), [bx1, by1] = at(-0.72, 1);
-    body.add(rod([side * (bx0 + 0.012), by0, -0.72], [side * (bx1 + 0.012), by1, -0.72], 0.032, carbon));
-    const [cx0, cy0] = at(-1.62, 0), [cx1, cy1] = at(-1.1, 1);
-    body.add(rod([side * (cx0 + 0.005), cy0, -1.62], [side * (cx1 + 0.01), cy1, -1.1], 0.04, paint));
+    const [ax0, ay0] = at(P.a[0], 0), [ax1, ay1] = at(P.a[1], 1);
+    body.add(rod([side * (ax0 + 0.005), ay0, P.a[0]], [side * (ax1 + 0.01), ay1, P.a[1]], 0.028, paint));
+    const [bx0, by0] = at(P.b, 0), [bx1, by1] = at(P.b, 1);
+    body.add(rod([side * (bx0 + 0.012), by0, P.b], [side * (bx1 + 0.012), by1, P.b], 0.032, carbon));
+    const [cx0, cy0] = at(P.c[0], 0), [cx1, cy1] = at(P.c[1], 1);
+    body.add(rod([side * (cx0 + 0.005), cy0, P.c[0]], [side * (cx1 + 0.01), cy1, P.c[1]], 0.04, paint));
     // Mirrors.
     const mx = halfWidth(0.45) - 0.05;
     body.add(rod([side * mx, shoulder(0.45) + 0.03, 0.45], [side * (mx + 0.12), shoulder(0.45) + 0.1, 0.42], 0.015, carbon));
@@ -487,7 +605,7 @@ export function buildCar(envMap, radial, look = {}) {
       body.add(box(0.03, 0.34, 0.58, paint, side * 0.96, wy - 0.06, -2.05));
       body.add(rod([side * 0.42, wy, -2.0], [side * 0.4, centreTop(-2.1) - 0.02, -2.12], 0.026, carbon));
     }
-  } else if (look.wing !== 'none') {
+  } else if (look.wing === 'duck' || !look.wing) {
     body.add(box(1.78, 0.03, 0.34, carbon, 0, 1.2, -1.98));
     for (const side of [1, -1]) {
       body.add(box(0.02, 0.18, 0.4, carbon, side * 0.89, 1.17, -1.99));
@@ -520,19 +638,65 @@ export function buildCar(envMap, radial, look = {}) {
     }
   }
 
-  // Rear: quad round tail lamps with chrome rings, one fat exhaust.
+  // Rear lights, in the car's own style.
   const tailMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 0.08, 0.12) });
-  const lampGeo = new THREE.CylinderGeometry(0.085, 0.085, 0.03, 20).rotateX(Math.PI / 2);
-  const ringGeo = new THREE.TorusGeometry(0.09, 0.012, 6, 20);
-  for (const x of [-0.72, -0.46, 0.46, 0.72]) {
-    const lamp = new THREE.Mesh(lampGeo, tailMat);
-    lamp.position.set(x, 0.72, -2.265);
-    body.add(lamp);
-    const ring = new THREE.Mesh(ringGeo, chrome);
-    ring.position.set(x, 0.72, -2.27);
-    body.add(ring);
+  const clearLens = new THREE.MeshStandardMaterial({ color: 0xd8dce4, metalness: 0.3, roughness: 0.15, envMap, envMapIntensity: 1.5 });
+  const tail = look.tail || 'quad';
+  const back = -2.265;
+  if (tail === 'quad') {
+    const lampGeo = new THREE.CylinderGeometry(0.085, 0.085, 0.03, 20).rotateX(Math.PI / 2);
+    const ringGeo = new THREE.TorusGeometry(0.09, 0.012, 6, 20);
+    for (const x of [-0.72, -0.46, 0.46, 0.72]) {
+      const lamp = new THREE.Mesh(lampGeo, tailMat);
+      lamp.position.set(x, 0.72, back);
+      body.add(lamp);
+      const ring = new THREE.Mesh(ringGeo, chrome);
+      ring.position.set(x, 0.72, back - 0.005);
+      body.add(ring);
+    }
+    body.add(box(1.3, 0.012, 0.012, tailMat, 0, 0.83, -2.26));
+  } else if (tail === 'bar') {
+    // A thin full-width light bar with deeper clusters at the corners.
+    body.add(box(1.5, 0.035, 0.02, tailMat, 0, 0.76, back));
+    for (const s of [1, -1]) {
+      const c = box(0.34, 0.1, 0.05, tailMat, s * 0.62, 0.74, back + 0.01);
+      c.rotation.y = s * 0.22;
+      body.add(c);
+    }
+  } else if (tail === 'boomerang') {
+    // Tall swept lamps that wrap up the rear corners.
+    for (const s of [1, -1]) {
+      for (const [y, h, rz] of [[0.72, 0.26, s * 0.55], [0.62, 0.12, 0]]) {
+        const c = box(0.09, h, 0.05, tailMat, s * (0.66 - (y < 0.7 ? 0.08 : 0)), y, back + 0.01);
+        c.rotation.z = rz;
+        c.rotation.y = s * 0.35;
+        body.add(c);
+      }
+    }
+  } else if (tail === 'square') {
+    for (const s of [1, -1]) {
+      body.add(box(0.42, 0.13, 0.03, tailMat, s * 0.52, 0.73, back));
+      body.add(box(0.12, 0.06, 0.032, clearLens, s * 0.38, 0.7, back - 0.002));
+    }
+  } else if (tail === 'wide') {
+    // One red lens across the whole tail, ribbed.
+    body.add(box(1.52, 0.15, 0.03, tailMat, 0, 0.72, back));
+    for (let k = -6; k <= 6; k++) body.add(box(0.01, 0.15, 0.034, seam, k * 0.115, 0.72, back - 0.002));
+  } else if (tail === 'clear') {
+    // Clear lenses with round red elements inside.
+    const lampGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.03, 16).rotateX(Math.PI / 2);
+    for (const s of [1, -1]) {
+      body.add(box(0.44, 0.15, 0.03, clearLens, s * 0.55, 0.73, back + 0.002));
+      for (const dx of [0.08, -0.08]) {
+        const l = new THREE.Mesh(lampGeo, tailMat);
+        l.position.set(s * (0.55 + dx), 0.73, back - 0.004);
+        body.add(l);
+      }
+    }
+  } else if (tail === 'band') {
+    body.add(box(1.56, 0.09, 0.03, tailMat, 0, 0.67, back));
+    body.add(box(0.5, 0.05, 0.034, seam, 0, 0.67, back - 0.002));
   }
-  body.add(box(1.3, 0.012, 0.012, tailMat, 0, 0.83, -2.26));
   // Exhaust tips per car, each with a sooty inner and its own backfire flame.
   const tips = { single: [-0.55], dual: [-0.55, 0.55], quad: [-0.62, -0.44, 0.44, 0.62], center: [-0.09, 0.09] }[look.exhaust || 'single'];
   const pipeGeo = new THREE.CylinderGeometry(0.06, 0.055, 0.26, 18, 1, true).rotateX(Math.PI / 2);
@@ -570,11 +734,13 @@ export function buildCar(envMap, radial, look = {}) {
 
   // Panel seams: door shut lines, bonnet and boot edges.
   both((side) => {
-    for (const z of [0.64, -0.7]) tube(mirror(flankPoints(z, 0.34, shoulder(z) - 0.03), side), 0.0045, seam, 12);
-    // Lower door edge along the sill.
-    const sill = [];
-    for (let z = 0.64; z >= -0.7; z -= 0.1) sill.push(new THREE.Vector3(side * (flankX(z, 0.36) + 0.004), 0.36, z));
-    tube(sill, 0.004, seam, 16);
+    for (const [d0, d1] of P.doors) {
+      for (const z of [d0, d1]) tube(mirror(flankPoints(z, 0.34, shoulder(z) - 0.03), side), 0.0045, seam, 12);
+      // Lower door edge along the sill.
+      const sill = [];
+      for (let z = d0; z >= d1; z -= 0.1) sill.push(new THREE.Vector3(side * (flankX(z, 0.36) + 0.004), 0.36, z));
+      tube(sill, 0.004, seam, 16);
+    }
     // Bonnet shut lines either side, and the boot lid's.
     const hood = [], boot = [];
     for (let z = 0.64; z <= 2.05; z += 0.1) hood.push(new THREE.Vector3(side * 0.62, topAt(z, 0.62) + 0.003, z));
@@ -582,8 +748,10 @@ export function buildCar(envMap, radial, look = {}) {
     tube(hood, 0.004, seam, 20);
     tube(boot, 0.004, seam, 8);
     // Door handle, recessed.
-    const hy = shoulder(-0.45) - 0.11;
-    body.add(box(0.012, 0.028, 0.13, chrome, side * (flankX(-0.45, hy) + 0.008), hy, -0.45));
+    for (const [, d1] of P.doors) {
+      const hz = d1 + 0.22, hy = shoulder(hz) - 0.11;
+      body.add(box(0.012, 0.028, 0.13, chrome, side * (flankX(hz, hy) + 0.008), hy, hz));
+    }
     // Gills behind the front wheel.
     for (let k = 0; k < 3; k++) {
       const z = 0.82 - k * 0.07, y = 0.55;
@@ -683,10 +851,22 @@ export function buildCar(envMap, radial, look = {}) {
     body.add(d);
   });
 
-  // Cabin: dash, bucket seats with harness, steering wheel (right-hand drive) and a roll cage.
+  // Cabin: dash, bucket seats with harness, steering wheel and (on built cars) a roll cage.
+  let steeringWheel = null;
   const fz = glassSection(0.2);
   body.add(box(1.36, 0.12, 0.36, cabin, 0, fz.base - 0.07, 0.3));
   body.add(box(1.2, 0.22, 2.2, cabin, 0, 0.36, -0.7));
+  // Interior tub: dark trim laid over the body shell inside the glasshouse, so from the driver's seat the
+  // cabin reads as door cards and parcel shelf instead of the paint underneath.
+  {
+    const z0 = P.a[0] - 0.04, z1 = P.c[0] + 0.04, n = 10;
+    for (let k = 0; k < n; k++) {
+      const za = z0 + ((z1 - z0) * k) / n, zb = z0 + ((z1 - z0) * (k + 1)) / n, zm = (za + zb) / 2;
+      const gs = glassSection(zm);
+      const y = Math.max(gs.base, shoulder(zm), centreTop(zm)) + 0.014;
+      body.add(box(2 * (gs.hb - 0.02), 0.02, Math.abs(zb - za) + 0.01, cabin, 0, y, zm));
+    }
+  }
   both((side) => {
     const x = side * 0.36;
     const seat = new THREE.Group();
@@ -708,17 +888,24 @@ export function buildCar(envMap, radial, look = {}) {
     body.add(seat);
   });
   {
-    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.02, 6, 24), cabin);
-    wheel.position.set(-0.36, fz.base + 0.02, 0.05);
-    wheel.rotation.x = -0.35;
-    body.add(wheel);
-    body.add(rod([-0.36, fz.base + 0.02, 0.05], [-0.36, fz.base - 0.05, 0.25], 0.02, cabin, 6));
+    // Steering wheel on the driver's side, kept out of the merge so it turns with the front wheels.
+    steeringWheel = new THREE.Group();
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.02, 6, 24), cabin);
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.025, 0.02), cabin);
+    const mark = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.03, 0.025), accent);
+    mark.position.y = 0.165;
+    steeringWheel.add(rim, spoke, mark);
+    steeringWheel.position.set(driverX, fz.base + 0.02, 0.05);
+    steeringWheel.rotation.x = -0.35;
+    steeringWheel.rotation.order = 'XYZ';
+    body.add(steeringWheel);
+    body.add(rod([driverX, fz.base + 0.02, 0.05], [driverX, fz.base - 0.05, 0.25], 0.02, cabin, 6));
     body.add(rod([0, 0.45, -0.15], [0, 0.66, -0.12], 0.01, chrome, 6));
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), accent);
     knob.position.set(0, 0.67, -0.12);
     body.add(knob);
   }
-  {
+  if (look.cage !== 'none') {
     const cage = look.cage === 'paint' ? paint : accent;
     const hoopZ = -0.95, gs = glassSection(hoopZ);
     const top = gs.top - 0.06, xs = gs.ht - 0.06, xb = gs.hb - 0.12;
@@ -774,17 +961,48 @@ export function buildCar(envMap, radial, look = {}) {
   }
 
   // Bake the body into one mesh per material; the flames toggle on their own.
-  mergeByMaterial(body, new Set([flame]));
+  const keep = new Set([flame]);
+  steeringWheel?.traverse((o) => o.isMesh && keep.add(o));
+  mergeByMaterial(body, keep);
+  // Cockpit eye point for the first-person camera, in body space.
+  const eye = new THREE.Vector3(driverX, glassSection(-0.5).base + 0.27, -0.66);
 
   let paintIndex = 0;
   let flameTime = 0;
   let lastThrottle = 0;
   let neonIndex = 0, rimIndex = 0;
   const roll = { x: 0, v: 0 }, pitch = { x: 0, v: 0 };
+  const stance = { y: 0 };
   const api = {
     root, body, wheels, beam,
     rearTrack: TRACK * sx, rearZ: REAR_Z * sz,
     onBackfire: null,
+    // Ride height, camber and spacers, as set in Customize.
+    setStance(t = {}) {
+      stance.y = (t.rideHeight || 0) / 100;
+      for (const w of wheels) {
+        const camber = ((w.front ? t.camberF ?? -1.5 : t.camberR ?? -1) * Math.PI) / 180;
+        const spacer = ((w.front ? t.trackF : t.trackR) || 0) / 100;
+        w.pivot.position.x = w.dir * (TRACK * sx + spacer);
+        w.mount.rotation.z = -camber; // mount is mirrored per side, so one sign leans both tops in
+      }
+    },
+    // World position of the driver's eyes, and the direction the car faces, for the cockpit camera.
+    cockpit(out) {
+      body.updateMatrixWorld();
+      return out.copy(eye).applyMatrix4(body.matrixWorld);
+    },
+    steeringWheel,
+    // Reflections: each world hands the car its own sky or neon environment.
+    setEnvMap(tex) {
+      root.traverse((o) => {
+        for (const m of [].concat(o.material || [])) {
+          if (m.envMap !== undefined && m.envMap !== tex && (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial)) { m.envMap = tex; m.needsUpdate = true; }
+        }
+      });
+    },
+    // Headlight beam on at night, off in daylight.
+    setLights(on) { beam.visible = on; tailGlow.visible = on; },
     setPaint(i) {
       paintIndex = (i + PAINTS.length) % PAINTS.length;
       paint.color.set(PAINTS[paintIndex].color);
@@ -795,7 +1013,7 @@ export function buildCar(envMap, radial, look = {}) {
       neonBase.set(NEONS[neonIndex].color);
       neon.color.copy(neonBase).multiplyScalar(3);
       glowMat.color.copy(neonBase).multiplyScalar(3);
-      poolMat.color.copy(neonBase).multiplyScalar(0.45);
+      poolMat.color.copy(neonBase).multiplyScalar(0.3);
       decalMat.color.copy(neonBase).multiplyScalar(1.4);
       return NEONS[neonIndex].name;
     },
@@ -817,9 +1035,12 @@ export function buildCar(envMap, radial, look = {}) {
         }
       });
     },
-    update(car, dt) {
-      root.position.set(car.x, 0, car.z);
+    update(car, dt, ground = null) {
+      root.position.set(car.x, ground ? ground.y : 0, car.z);
       root.rotation.y = car.h;
+      body.position.y = stance.y;
+      if (ground) { root.rotation.x = ground.pitch || 0; root.rotation.z = ground.roll || 0; root.rotation.order = 'YXZ'; }
+      if (steeringWheel) steeringWheel.rotation.z = -car.steer * 2.6;
       // Body roll from lateral load, pitch from acceleration.
       // Roll and pitch from the same load transfer the tyres feel, on a slightly bouncy spring.
       roll.v += (THREE.MathUtils.clamp(car.ay * 0.0075, -0.075, 0.075) - roll.x) * 90 * dt - roll.v * 11 * dt;

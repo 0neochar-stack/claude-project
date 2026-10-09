@@ -67,6 +67,11 @@ export class Screens {
     if (!items.length) return;
     const cur = document.activeElement;
     if (!items.includes(cur)) { items[0].focus(); return; }
+    // Left and right change a cycler's value instead of moving focus.
+    if (cur.classList.contains('cycler') && (dir === 'left' || dir === 'right')) {
+      cur.dispatchEvent(new CustomEvent('cycle', { detail: dir === 'right' ? 1 : -1 }));
+      return;
+    }
     if (cur.type === 'range' && (dir === 'left' || dir === 'right')) {
       if (dir === 'right') cur.stepUp(); else cur.stepDown();
       cur.dispatchEvent(new Event('input', { bubbles: true }));
@@ -97,5 +102,6 @@ export class Screens {
     else if (a === 'navRight') this.move('right');
     else if (a === 'confirm') document.activeElement?.click?.();
     else if (a === 'back' || a === 'help') this.back();
+    else this.onExtra?.(a);
   }
 }

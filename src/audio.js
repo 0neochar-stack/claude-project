@@ -20,6 +20,12 @@ export const ENGINES = {
   v8: { fire: [0, 90, 180, 270, 360, 450, 540, 630], offs: [0, 9, 0, 4, 9, 0, 9, 5], amp: [1, 0.68, 1, 0.92, 0.7, 1, 0.74, 0.66], pipe: 92, pipe2: 205, muffle: 1500, rasp: 0.35, thump: 1.35, gain: 1 },
   // Twin-turbo six: the turbines soak up the exhaust, so it is smoother and more muffled.
   i6tt: { fire: [0, 120, 240, 360, 480, 600], offs: [0, 0, 0, 0, 0, 0], amp: [1, 0.97, 1, 0.98, 1, 0.97], pipe: 150, pipe2: 310, muffle: 1700, rasp: 0.3, thump: 0.85, gain: 1.1 },
+  // Inline four: two pulses per revolution, buzzy and bright with a hollow exhaust note.
+  i4: { fire: [0, 180, 360, 540], offs: [0, 3, 0, 4], amp: [1, 0.9, 0.97, 0.88], pipe: 140, pipe2: 300, muffle: 2300, rasp: 0.5, thump: 0.9, gain: 1.05 },
+  // 60 degree V6 (VQ): even firing but each bank's pipes see the other through the Y-pipe, a gravelly howl.
+  v6: { fire: [0, 120, 240, 360, 480, 600], offs: [0, 6, 0, 6, 0, 6], amp: [1, 0.82, 0.98, 0.84, 1, 0.8], pipe: 128, pipe2: 290, muffle: 2100, rasp: 0.62, thump: 0.95, gain: 1.05 },
+  // Twin-rotor rotary: a sharp port pulse per rotor face, no valves, so it is all rasp and brap.
+  rotary: { fire: [0, 180, 360, 540], offs: [0, 0, 0, 0], amp: [1, 1, 1, 1], pipe: 210, pipe2: 470, muffle: 3600, rasp: 0.95, thump: 0.6, gain: 0.95 },
 };
 const REFS = [1100, 2400, 4000, 5800, 7700];
 
@@ -98,6 +104,23 @@ export class Sound {
     this.lastGear = 1;
     this.crackle = 0;
     this.buffers = new Map(); // engine type -> rendered loops, so switching cars back is instant
+    this.volume = 0.9;
+    this.amb = { rain: 1, wet: 1, wind: 0, water: 0, siren: 0 };
+  }
+
+  // World ambience: rain 0..1, wet road 0..1, wind 0..1, waterfall 0..1, siren 0..1.
+  setAmbience(a) {
+    Object.assign(this.amb, a);
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.rainG.gain.setTargetAtTime(0.06 * this.amb.rain, t, 0.3);
+    this.waterG.gain.setTargetAtTime(0.16 * this.amb.water, t, 0.2);
+    this.sirenG.gain.setTargetAtTime(0.05 * this.amb.siren, t, 0.1);
+  }
+
+  setVolume(v) {
+    this.volume = v;
+    if (this.master && !this.muted) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
   }
 
   start() {
@@ -106,7 +129,7 @@ export class Sound {
     if (!AC) return;
     const ctx = (this.ctx = new AC());
     const master = (this.master = ctx.createGain());
-    master.gain.value = this.muted ? 0 : 0.9;
+    master.gain.value = this.muted ? 0 : this.volume;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
     comp.ratio.value = 4;
@@ -213,8 +236,19 @@ export class Sound {
     noise().connect(this.tyreF).connect(this.tyreG).connect(this.carBus);
 
     // Rain bed and wet road hiss.
-    const rainG = gain(0.06);
-    noise().connect(filter('lowpass', 2600)).connect(filter('highpass', 400)).connect(rainG).connect(master);
+    this.rainG = gain(0.06 * this.amb.rain);
+    noise().connect(filter('lowpass', 2600)).connect(filter('highpass', 400)).connect(this.rainG).connect(master);
+    // Wind in the trees and the roar of falling water, both set by the world.
+    this.windF = filter('lowpass', 420, 0.7);
+    this.windG = gain(0);
+    noise().connect(this.windF).connect(this.windG).connect(master);
+    this.waterG = gain(0.16 * this.amb.water);
+    noise().connect(filter('lowpass', 1800)).connect(filter('highpass', 120)).connect(this.waterG).connect(master);
+    // Police siren: a sawtooth through a horn-like band-pass, wailing up and down.
+    this.sirenO = osc('sawtooth', 700);
+    this.sirenF = filter('bandpass', 1100, 1.2);
+    this.sirenG = gain(0.05 * this.amb.siren);
+    this.sirenO.connect(this.sirenF).connect(this.sirenG).connect(master);
     this.hissF = filter('bandpass', 3200, 0.8);
     this.hissG = gain();
     noise().connect(this.hissF).connect(this.hissG).connect(this.carBus);
@@ -316,7 +350,7 @@ export class Sound {
 
   setMuted(m) {
     this.muted = m;
-    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.9, this.ctx.currentTime, 0.05);
+    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : this.volume, this.ctx.currentTime, 0.05);
   }
 
   update(car, dt) {
@@ -376,7 +410,16 @@ export class Sound {
     this.squealG.gain.setTargetAtTime(slip * 0.05, t, 0.04);
     this.tyreF.frequency.setTargetAtTime(900 + slip * 500 + Math.random() * 80, t, 0.03);
     this.tyreG.gain.setTargetAtTime(slip * 0.13, t, 0.05);
-    this.hissG.gain.setTargetAtTime(Math.min(1, car.speed / 40) * 0.05, t, 0.1);
+    this.hissG.gain.setTargetAtTime(Math.min(1, car.speed / 40) * (0.012 + 0.038 * this.amb.wet), t, 0.1);
+    // Wind gusts and the siren's wail.
+    const gust = 0.6 + 0.4 * Math.sin(t * 0.37) * Math.sin(t * 0.23 + 1);
+    this.windG.gain.setTargetAtTime(this.amb.wind * 0.05 * gust + Math.min(1, car.speed / 60) * 0.02, t, 0.3);
+    this.windF.frequency.setTargetAtTime(300 + gust * 250 + car.speed * 6, t, 0.3);
+    if (this.amb.siren > 0) {
+      const wail = 0.5 + 0.5 * Math.sin(t * Math.PI * 0.8);
+      this.sirenO.frequency.setTargetAtTime(640 + wail * 720, t, 0.02);
+      this.sirenF.frequency.setTargetAtTime(900 + wail * 700, t, 0.02);
+    }
 
     // Shifts: a clunk through the drivetrain.
     if (car.gear !== this.lastGear) {

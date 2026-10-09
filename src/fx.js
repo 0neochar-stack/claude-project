@@ -173,21 +173,20 @@ export class SkidMarks {
   }
 
   // Call each frame per tyre; strength 0 lifts the pen.
-  mark(key, x, z, strength, time, width = 0.25) {
+  mark(key, x, z, strength, time, width = 0.25, y = 0.03) {
     const p = this.prev.get(key);
     if (strength <= 0) { this.prev.delete(key); return; }
-    if (!p) { this.prev.set(key, { x, z, s: strength }); return; }
+    if (!p) { this.prev.set(key, { x, y, z, s: strength }); return; }
     const dx = x - p.x, dz = z - p.z, len = Math.hypot(dx, dz);
     if (len < 0.3) return;
-    if (len > 4) { this.prev.set(key, { x, z, s: strength }); return; } // teleported (reset)
+    if (len > 4) { this.prev.set(key, { x, y, z, s: strength }); return; } // teleported (reset)
     const nx = (-dz / len) * width * 0.5, nz = (dx / len) * width * 0.5;
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.count;
-    const y = 0.03;
-    this.pos.set([p.x + nx, y, p.z + nz, p.x - nx, y, p.z - nz, x + nx, y, z + nz, x - nx, y, z - nz], i * 12);
+    this.pos.set([p.x + nx, p.y, p.z + nz, p.x - nx, p.y, p.z - nz, x + nx, y, z + nz, x - nx, y, z - nz], i * 12);
     this.birth.fill(time, i * 4, i * 4 + 4);
     this.strength.set([p.s, p.s, strength, strength], i * 4);
-    this.prev.set(key, { x, z, s: strength });
+    this.prev.set(key, { x, y, z, s: strength });
     this.dirty = true;
   }
 

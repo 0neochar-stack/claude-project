@@ -9,7 +9,7 @@ const KEYS = {
 };
 const ACTIONS = {
   KeyE: 'shiftUp', KeyQ: 'shiftDown', KeyC: 'camera', KeyR: 'reset', KeyG: 'gearbox',
-  KeyT: 'assist', KeyP: 'paint', KeyM: 'mute', KeyH: 'help', Escape: 'help',
+  KeyT: 'assist', KeyP: 'paint', KeyM: 'mute', KeyH: 'help', Escape: 'help', KeyV: 'view',
 };
 
 export class Input {
@@ -121,7 +121,21 @@ export class Input {
       s.clutch = s.clutch || btn(2) > 0.5;
       if (Math.abs(steer) > 0 || gas > 0.05 || brake > 0.05 || btn(0) > 0.5) this.lastPad = pad;
 
-      const edges = { 0: 'confirm', 9: 'help', 5: 'shiftUp', 4: 'shiftDown', 3: 'camera', 8: 'reset', 12: 'paint', 13: 'assist' };
+      // In menus the D-pad and left stick move focus, A confirms, B goes back and the bumpers flip tabs.
+      const edges = this.menuMode
+        ? { 0: 'confirm', 1: 'back', 9: 'help', 12: 'navUp', 13: 'navDown', 14: 'navLeft', 15: 'navRight', 4: 'tabPrev', 5: 'tabNext' }
+        : { 0: 'confirm', 9: 'help', 5: 'shiftUp', 4: 'shiftDown', 3: 'camera', 8: 'reset', 12: 'view', 13: 'assist' };
+      if (this.menuMode) {
+        const sx = pad.axes[0] || 0, sy = pad.axes[1] || 0;
+        const dir = Math.abs(sy) > 0.6 ? (sy > 0 ? 'navDown' : 'navUp') : Math.abs(sx) > 0.6 ? (sx > 0 ? 'navRight' : 'navLeft') : null;
+        const now = performance.now();
+        if (!dir) st.stickNext = 0;
+        else if (now >= (st.stickNext || 0)) {
+          this.actions.push(dir);
+          st.stickNext = now + (st.stickHeld ? 140 : 380);
+        }
+        st.stickHeld = !!dir && st.stickNext > 0;
+      }
       for (const [i, act] of Object.entries(edges)) {
         const pressed = btn(+i) > 0.5;
         if (pressed && !st.prev[i]) this.actions.push(act);

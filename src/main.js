@@ -1,82 +1,131 @@
+// Game shell: renderer, menus, the player's car, and whichever world is loaded. Worlds are built when first
+// chosen and freed when another is picked; the showroom behind the menus is always there and cheap.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CarBody } from './physics.js';
-import { collide, nearestRoad, SPAWN, BLOCKS, SOLID_BLOCKS, HALF, PILLARS, PLAZA_AREA } from './world.js';
-import { WetReflections, LAYER_MAIN_ONLY, LAYER_WET } from './wet.js';
-import { buildCity } from './city.js';
-import { buildCar, makeCarEnvironment, PAINTS } from './car.js';
-import { Particles, SkidMarks, makeRain } from './fx.js';
+import { LAYER_MAIN_ONLY, LAYER_WET } from './wet.js';
+import { buildCar, makeCarEnvironment } from './car.js';
+import { Particles, SkidMarks, radialTexture } from './fx.js';
 import { Sound } from './audio.js';
 import { Input } from './input.js';
 import { DriftScore } from './drift.js';
-import { Profile, carById, buildSpec } from './garage.js';
-import { GarageUI } from './garageUI.js';
+import { Profile, carById, buildSpec, engineSound, specStats } from './garage.js';
+import { Settings, QUALITY_ORDER } from './settings.js';
+import { Screens } from './ui.js';
+import { Hud } from './hud.js';
+import { CameraRig, CAMERAS } from './camera.js';
+import { Customize } from './customize.js';
+import { createShowroom } from './worlds/showroom.js';
+import { createNeonWorld } from './worlds/neon.js';
+import { createOpenWorld } from './worlds/open.js';
 
 const $ = (id) => document.getElementById(id);
 const isTouch = matchMedia('(pointer: coarse)').matches;
 if (isTouch) document.body.classList.add('is-touch');
+const fmt = new Intl.NumberFormat('en-US');
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
-// ---------- renderer ----------
+// ---------- settings and renderer ----------
+const settings = new Settings();
+let preset = settings.preset;
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
-let pixelRatio = Math.min(devicePixelRatio || 1, isTouch ? 1.25 : 1.75);
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+let pixelRatio = Math.min(devicePixelRatio || 1, preset.pixelRatio);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0d0718);
-scene.fog = new THREE.FogExp2(0x1a0b24, 0.0068);
-
-const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 2000);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
 camera.layers.enable(LAYER_MAIN_ONLY);
 camera.layers.enable(LAYER_WET);
 
-const hemi = new THREE.HemisphereLight(0x6f5cff, 0x2a1030, 0.9);
-scene.add(hemi);
-const moon = new THREE.DirectionalLight(0x9fb4ff, 0.35);
-moon.position.set(-60, 120, 40);
-scene.add(moon);
-
-const refl = new WetReflections();
-refl.scale = isTouch ? 0.35 : 0.5;
-const city = buildCity(scene, refl);
-
-const sound = new Sound();
-const profile = new Profile();
-const car = new CarBody(profile.spec());
-car.reset(SPAWN.x, SPAWN.z, SPAWN.heading);
-const carEnv = makeCarEnvironment(renderer);
-let carView = null;
-
-// Builds the 3D car and physics for a car id: your saved style if you own it, the showroom look if not.
-function showCar(id) {
-  const def = carById(id);
-  const style = profile.owns(id) ? profile.car(id) : def.look;
-  carView?.dispose();
-  carView = buildCar(carEnv, city.radial, { ...def.look, paint: style.paint, neon: style.neon, rims: style.rims });
-  carView.onBackfire = () => sound.pop();
-  scene.add(carView.root);
-  car.spec = profile.owns(id) ? profile.spec(id) : buildSpec(id);
-  sound.setEngine(def.engine);
-  carView.update(car, 0);
-}
-showCar(profile.current);
-
-const particles = new Particles(isTouch ? 900 : 2000);
-scene.add(particles.points);
-const rain = makeRain(isTouch ? 4500 : 10000);
-scene.add(rain);
-const skids = new SkidMarks(isTouch ? 1400 : 2400);
-scene.add(skids.mesh);
-
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.85, 0.55, 0.82);
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.5, 0.85);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+
+// ---------- car, sound, effects ----------
+const sound = new Sound();
+sound.setVolume(settings.volume);
+const profile = new Profile();
+const car = new CarBody(profile.spec());
+const neonEnv = makeCarEnvironment(renderer);
+let carView = null;
+let particles = new Particles(preset.particles);
+scene.add(particles.points);
+let skids = new SkidMarks(isTouch ? 1400 : 2400);
+scene.add(skids.mesh);
+const score = new DriftScore();
+const input = new Input();
+input.bindTouch($('touch'));
+const hud = new Hud();
+const rig = new CameraRig(camera);
+rig.set(settings.camera);
+const ASSISTS = [['Off', 0], ['Low', 0.35], ['Medium', 0.75], ['High', 1]];
+car.assist = ASSISTS[settings.assist][1];
+
+const showroom = createShowroom();
+scene.add(showroom.root);
+let world = null; // the drivable world, once one is loaded
+let worldId = null;
+let state = 'boot'; // boot | menu | customize | loading | drive | pause
+let clock = 0;
+let frameNo = 0;
+let saved = null; // where the car was when you left a world for the garage
+let ground = null;
+let revTimer = 0;
+
+// Builds the 3D car for a car id: your saved style if you own it, the showroom look if not.
+function showCar(id) {
+  const def = carById(id);
+  const st = profile.owns(id) ? profile.car(id) : def.look;
+  carView?.dispose();
+  carView = buildCar(neonEnv, radialTexture(), {
+    ...def.look, paint: st.paint, neon: st.neon, rims: st.rims, wheels: st.wheels || def.look.wheels, wing: st.wing || def.look.wing,
+  });
+  carView.onBackfire = () => sound.pop();
+  scene.add(carView.root);
+  const active = activeWorld();
+  if (active.env.carEnv) carView.setEnvMap(active.env.carEnv);
+  carView.setLights(active.env.headlights !== false);
+  carView.setStance(profile.owns(id) ? profile.car(id).tune : null);
+  car.spec = profile.owns(id) ? profile.spec(id) : buildSpec(id);
+  sound.setEngine(profile.owns(id) ? engineSound(id, profile.car(id).tune) : def.engine);
+  carView.update(car, 0, ground);
+}
+
+const activeWorld = () => (state === 'drive' || state === 'pause' || state === 'loading' ? world || showroom : showroom);
+
+// ---------- world environment ----------
+function applyEnv(w) {
+  const env = w.env;
+  scene.background = env.background;
+  scene.fog = env.fog;
+  renderer.toneMappingExposure = env.exposure;
+  bloom.enabled = preset.bloom && !!env.bloom;
+  if (env.bloom) { bloom.strength = env.bloom.strength; bloom.radius = env.bloom.radius; bloom.threshold = env.bloom.threshold; }
+  const far = Math.min(env.far, preset.far);
+  if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
+  renderer.shadowMap.enabled = !!(preset.shadows && env.shadows);
+}
+
+function setWorldVisible() {
+  const inWorld = state === 'drive' || state === 'pause';
+  showroom.root.visible = !inWorld;
+  if (world) world.root.visible = inWorld;
+  skids.mesh.visible = inWorld;
+  const w = inWorld && world ? world : showroom;
+  applyEnv(w);
+  if (carView) {
+    carView.setEnvMap(w.env.carEnv || neonEnv);
+    carView.setLights(w.env.headlights !== false);
+  }
+  sound.setAmbience({ rain: inWorld ? w.env.rain ?? 0 : 0, wet: inWorld ? w.env.wet ?? 0 : 0, wind: 0, water: 0, siren: 0 });
+}
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -84,511 +133,503 @@ function resize() {
   renderer.setSize(w, h, false);
   composer.setPixelRatio(pixelRatio);
   composer.setSize(w, h);
-  refl.setSize(w * pixelRatio, h * pixelRatio);
+  world?.resize?.(w * pixelRatio, h * pixelRatio);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   particles.material.uniforms.uScale.value = (h * pixelRatio) / 2;
 }
 addEventListener('resize', resize);
-resize();
 
-// ---------- game state ----------
-const input = new Input();
-input.bindTouch($('touch'));
-const score = new DriftScore();
-const ASSISTS = [['Off', 0], ['Low', 0.35], ['Medium', 0.75], ['High', 1]];
-let assistIndex = 2;
-car.assist = ASSISTS[assistIndex][1];
-let cameraMode = 0;
-const CAMERAS = ['Chase', 'Far chase', 'Bumper'];
-let playing = false;
-let started = false;
-let shake = 0;
-let flash = 0;
-let nextLightning = 12 + Math.random() * 20;
-let clock = 0;
-let rumbleTimer = 0;
-
-try { assistIndex = Math.min(3, Math.max(0, Number(localStorage.getItem('cd.assist2') ?? 2))); } catch { /* storage blocked */ }
-car.assist = ASSISTS[assistIndex][1];
-
-// ---------- HUD ----------
-const hud = {
-  total: $('total'), best: $('best'), chain: $('chain'), grade: $('grade'), points: $('points'), mult: $('mult'),
-  angle: $('angle'), grace: $('grace'), speed: $('speed'), gear: $('gear'), banner: $('banner'), toast: $('toast'),
-  chipGear: $('chip-gear'), chipAssist: $('chip-assist'), credits: $('credits'),
-  boost: $('boost'), boostV: $('boost-value'), boostBar: $('boost-bar'), boostL: $('boost-label'),
+// ---------- loading worlds ----------
+const WORLDS = {
+  neon: { name: 'Neon Tokyo', title: 'Neon <em>Tokyo</em>', tip: 'Wet roads grip less. Clutch-kick with Shift to snap the rear loose.', create: createNeonWorld },
+  open: { name: 'Open World', title: 'Open <em>World</em>', tip: 'Big drift chains at night get the police interested. Lose them to cool off.', create: createOpenWorld },
 };
-let boostShown = 0;
-const fmt = new Intl.NumberFormat('en-US');
-const last = {};
-function setText(key, el, text) {
-  if (last[key] !== text) { el.textContent = text; last[key] = text; }
+
+function setLoader(title, tip, frac) {
+  $('loader').hidden = false;
+  if (title !== null) $('loader-title').innerHTML = title;
+  if (tip !== null) $('loader-tip').textContent = tip;
+  $('loader-bar').style.transform = `scaleX(${frac.toFixed(3)})`;
 }
 
-// Tachometer drawn once in SVG; the live arc is a dash along a unit-length path.
-const TACH = { cx: 95, cy: 95, r: 82, a0: 135, sweep: 270, max: 8000 };
-function arcPath(fromFrac, toFrac, r = TACH.r) {
-  const ang = (f) => ((TACH.a0 + TACH.sweep * f) * Math.PI) / 180;
-  const p = (f) => [TACH.cx + r * Math.cos(ang(f)), TACH.cy + r * Math.sin(ang(f))];
-  const [x0, y0] = p(fromFrac), [x1, y1] = p(toFrac);
-  const large = (toFrac - fromFrac) * TACH.sweep > 180 ? 1 : 0;
-  return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
-}
-(function drawTach() {
-  let svg = `<path class="dash__track" d="${arcPath(0, 1)}"/>`;
-  svg += `<path class="dash__red" d="${arcPath(7000 / TACH.max, 1)}"/>`;
-  svg += `<path class="dash__rpm" id="rpm" pathLength="1" stroke-dasharray="0 1" d="${arcPath(0, 1)}"/>`;
-  for (let k = 0; k <= 8; k++) {
-    const a = ((TACH.a0 + (TACH.sweep * k) / 8) * Math.PI) / 180;
-    const c = Math.cos(a), s = Math.sin(a);
-    svg += `<line class="dash__tick" x1="${95 + c * 70}" y1="${95 + s * 70}" x2="${95 + c * 76}" y2="${95 + s * 76}"/>`;
-    svg += `<text class="dash__num" x="${95 + c * 60}" y="${95 + s * 60}">${k}</text>`;
+async function loadWorld(id) {
+  const def = WORLDS[id];
+  if (!def) return;
+  if (worldId !== id) {
+    state = 'loading';
+    screens.set(null);
+    setLoader(def.title, def.tip, 0.05);
+    await nextFrame();
+    await nextFrame();
+    if (world) { world.dispose(); world = null; worldId = null; }
+    skids.mesh.removeFromParent();
+    skids = new SkidMarks(isTouch ? 1400 : 2400);
+    scene.add(skids.mesh);
+    world = await def.create({ preset, sound, particles, settings, renderer, scene, camera, profile, progress: async (f, tip) => { setLoader(null, tip ?? null, 0.05 + f * 0.9); await nextFrame(); } });
+    worldId = id;
+    world.root.visible = false;
+    scene.add(world.root);
+    setLoader(null, null, 1);
+    resize();
+    // Compile shaders now rather than stuttering on the first frames of driving.
+    state = 'drive';
+    setWorldVisible();
+    renderer.compile(scene, camera);
+    await nextFrame();
   }
-  $('tach').innerHTML = svg;
-})();
-const rpmArc = $('rpm');
-
-let toastTimer = 0;
-function toast(text) {
-  hud.toast.textContent = text;
-  hud.toast.classList.add('is-shown');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => hud.toast.classList.remove('is-shown'), 1600);
-}
-function banner(text, kind) {
-  const b = hud.banner;
-  b.textContent = text;
-  b.className = `banner banner--${kind}`;
-  void b.offsetWidth;
-  b.classList.add('is-shown');
+  startDriving(world.spawn);
+  $('loader').hidden = true;
 }
 
-// Minimap: the city pre-drawn once at 1 px per metre, then rotated so the car always points up.
-const mapImg = document.createElement('canvas');
-const MAP_OFF = HALF + 30;
-mapImg.width = mapImg.height = Math.ceil(MAP_OFF * 2);
-(function drawMap() {
-  const g = mapImg.getContext('2d');
-  g.fillStyle = '#1a1030';
-  g.fillRect(0, 0, mapImg.width, mapImg.height);
-  g.fillStyle = '#5b5680';
-  g.fillRect(30, 30, HALF * 2, HALF * 2);
-  for (const b of BLOCKS) {
-    g.fillStyle = b.plaza ? '#4a2350' : '#120c22';
-    if (b.plaza) continue;
-    g.fillRect(b.x0 + MAP_OFF, b.z0 + MAP_OFF, b.x1 - b.x0, b.z1 - b.z0);
-  }
-  g.strokeStyle = '#ff3fb4';
-  g.lineWidth = 2;
-  g.strokeRect(PLAZA_AREA.x0 + MAP_OFF + 2, PLAZA_AREA.z0 + MAP_OFF + 2, PLAZA_AREA.x1 - PLAZA_AREA.x0 - 4, PLAZA_AREA.z1 - PLAZA_AREA.z0 - 4);
-  g.fillStyle = '#ff3fb4';
-  for (const p of PILLARS) { g.beginPath(); g.arc(p.x + MAP_OFF, p.z + MAP_OFF, p.r + 1, 0, Math.PI * 2); g.fill(); }
-})();
-const mini = $('minimap').getContext('2d');
-function drawMinimap() {
-  const W = 336, s = W / 2 / 150;
-  const ch = Math.cos(car.h), sh = Math.sin(car.h);
-  const a = -s * ch, b = -s * sh, c = s * sh, d = -s * ch;
-  const px = car.x + MAP_OFF, pz = car.z + MAP_OFF;
-  mini.setTransform(1, 0, 0, 1, 0, 0);
-  mini.fillStyle = '#0c0818';
-  mini.fillRect(0, 0, W, W);
-  mini.setTransform(a, b, c, d, W / 2 - a * px - c * pz, W / 2 - b * px - d * pz);
-  mini.drawImage(mapImg, 0, 0);
-  mini.setTransform(1, 0, 0, 1, 0, 0);
-  mini.fillStyle = '#33f0ff';
-  mini.shadowColor = '#33f0ff';
-  mini.shadowBlur = 12;
-  mini.beginPath();
-  mini.moveTo(W / 2, W / 2 - 13);
-  mini.lineTo(W / 2 + 8, W / 2 + 9);
-  mini.lineTo(W / 2, W / 2 + 4);
-  mini.lineTo(W / 2 - 8, W / 2 + 9);
-  mini.closePath();
-  mini.fill();
-  mini.shadowBlur = 0;
+function startDriving(at) {
+  state = 'drive';
+  screens.set(null);
+  car.reset(at.x, at.z, at.heading);
+  car.spec = profile.spec();
+  score.chain = 0;
+  score.mult = 1;
+  rig.snap(car);
+  world.onReset?.();
+  enterDrive();
 }
 
-function updateHud() {
-  setText('total', hud.total, fmt.format(Math.round(score.total)));
-  setText('best', hud.best, fmt.format(Math.round(score.best)));
-  setText('credits', hud.credits, `${fmt.format(profile.credits)} CR`);
-  const showChain = score.chain > 0;
-  hud.chain.classList.toggle('is-idle', !showChain);
-  if (showChain) {
-    setText('grade', hud.grade, score.grade);
-    setText('points', hud.points, fmt.format(Math.round(score.chain)));
-    setText('mult', hud.mult, `×${score.mult.toFixed(1)}`);
-    setText('angle', hud.angle, `${Math.round(score.angle)}°`);
-    hud.grace.style.transform = `scaleX(${score.graceLeft.toFixed(3)})`;
-  }
-  setText('speed', hud.speed, String(Math.round(car.speed * 3.6)));
-  // Boost gauge, only for cars with a turbo or supercharger fitted.
-  const forced = car.spec.turboGain > 0 || car.spec.scGain > 0;
-  if (hud.boost.hidden === forced) hud.boost.hidden = !forced;
-  if (forced) {
-    boostShown += (car.boostBar - boostShown) * 0.25;
-    setText('boostV', hud.boostV, `${boostShown.toFixed(2)} bar`);
-    hud.boostBar.style.transform = `scaleX(${Math.min(1, boostShown / 1.2).toFixed(3)})`;
-    setText('boostL', hud.boostL, car.spec.turboGain && car.spec.scGain ? 'Twin-charge' : car.spec.turboGain ? 'Turbo' : 'Supercharger');
-  }
-  setText('gear', hud.gear, car.gear === -1 ? 'R' : String(car.gear));
-  const frac = Math.min(1, car.rpm / TACH.max);
-  rpmArc.setAttribute('stroke-dasharray', `${frac.toFixed(3)} 1`);
-  rpmArc.classList.toggle('is-hot', car.rpm > 7000);
-  setText('chipGear', hud.chipGear, car.autoGear ? 'AUTO' : 'MANUAL');
-  setText('chipAssist', hud.chipAssist, `ASSIST ${ASSISTS[assistIndex][0].toUpperCase()}`);
-  drawMinimap();
+function enterDrive() {
+  state = 'drive';
+  screens.set(null);
+  setWorldVisible();
+  $('hud').hidden = false;
+  $('touch').hidden = !isTouch;
+  sound.start();
+  sound.setMuted(sound.muted);
+  canvas.focus?.({ preventScroll: true });
+  input.menuMode = false;
 }
 
-// ---------- menu ----------
-const menu = $('menu');
-function syncOptions() {
-  $('opt-assist').textContent = `Assist: ${ASSISTS[assistIndex][0]}`;
-  $('opt-gearbox').textContent = `Gearbox: ${car.autoGear ? 'Auto' : 'Manual'}`;
-  $('menu-car').textContent = `Car: ${carById(profile.current).name} · ${fmt.format(profile.credits)} CR`;
-}
-function cycleAssist() {
-  assistIndex = (assistIndex + 1) % ASSISTS.length;
-  car.assist = ASSISTS[assistIndex][1];
-  try { localStorage.setItem('cd.assist2', String(assistIndex)); } catch { /* storage blocked */ }
-  syncOptions();
-  return `Drift assist ${ASSISTS[assistIndex][0]}`;
-}
-function toggleGearbox() {
-  car.autoGear = !car.autoGear;
-  syncOptions();
-  return car.autoGear ? 'Automatic gearbox' : 'Manual gearbox · E / Q to shift';
-}
-function nextPaint() {
-  const i = (profile.car().paint + 1) % PAINTS.length;
-  profile.setStyle(profile.current, 'paint', i);
-  return carView.setPaint(i);
-}
-$('opt-assist').addEventListener('click', cycleAssist);
-$('opt-gearbox').addEventListener('click', toggleGearbox);
-$('opt-garage').addEventListener('click', () => {
-  menu.hidden = true;
-  garage.open();
-});
-$('go').addEventListener('click', () => setPlaying(true));
-$('btn-menu').addEventListener('click', () => setPlaying(false));
-$('btn-sound').addEventListener('click', (e) => {
-  sound.setMuted(!sound.muted);
-  e.currentTarget.textContent = sound.muted ? 'Sound off' : 'Sound on';
-  e.currentTarget.blur();
-});
-
-function setPlaying(on) {
-  playing = on;
-  menu.hidden = on;
-  $('hud').hidden = !on && !started;
-  $('touch').hidden = !(on && isTouch);
-  if (on) {
-    started = true;
-    $('go').textContent = 'Resume';
-    sound.start();
-    sound.setMuted(sound.muted);
-    canvas.focus?.();
-  } else if (sound.ctx) sound.ctx.suspend();
-  syncOptions();
+function pause() {
+  if (state !== 'drive') return;
+  state = 'pause';
+  $('touch').hidden = true;
+  $('pause-place').textContent = world.placeInfo(car);
+  $('pause-cam').textContent = rig.name;
+  $('pause-time-row').hidden = !world.setTimeOfDay;
+  $('pause-time').textContent = TIMES.find((t) => t[0] === settings.timeOfDay)?.[1] || 'Cycle';
+  screens.set('pause');
+  sound.setAmbience({ siren: 0 });
+  if (sound.ctx) sound.ctx.suspend();
 }
 
-// ---------- garage ----------
-const garage = new GarageUI($('garage'), profile, {
+function resume() {
+  if (state !== 'pause') return;
+  if (sound.ctx) sound.ctx.resume();
+  enterDrive();
+}
+
+function quitToMenu() {
+  state = 'menu';
+  $('hud').hidden = true;
+  $('touch').hidden = true;
+  if (sound.ctx) sound.ctx.resume();
+  toShowroom();
+  screens.set('main');
+  renderMain();
+}
+
+// The garage and menus happen in the showroom: park the car on the turntable.
+function toShowroom() {
+  setWorldVisible();
+  car.reset(0, 0, showroom.spawn.heading);
+  ground = null;
+  rig.snap(car);
+}
+
+// ---------- menus ----------
+const screens = new Screens();
+const customize = new Customize($('cust'), profile, {
   onPreview: (id) => showCar(id),
-  onChange: (id, what) => {
-    const style = profile.car(id);
-    if (what === 'select') {
-      showCar(id);
-      car.reset(car.x, car.z, car.h);
-      score.chain = 0;
-      score.mult = 1;
-    } else if (what === 'spec') car.spec = profile.spec(id);
-    else if (what === 'paint') carView.setPaint(style.paint);
-    else if (what === 'neon') carView.setNeon(style.neon);
-    else if (what === 'rims') carView.setRims(style.rims);
+  onSelect: (id) => { showCar(id); renderMain(); },
+  onStyle: (id, key) => {
+    const st = profile.car(id);
+    if (key === 'paint') carView.setPaint(st.paint);
+    else if (key === 'neon') carView.setNeon(st.neon);
+    else if (key === 'rims') carView.setRims(st.rims);
+    else showCar(id); // wheels, wing or everything: rebuild the body
   },
-  onClose: () => {
-    menu.hidden = false;
-    syncOptions();
-    $('opt-garage').focus({ preventScroll: true });
+  onTune: (id, what) => {
+    car.spec = profile.spec(id);
+    carView.setStance(profile.car(id).tune);
+    if (what === 'engine' || what === 'all') sound.setEngine(engineSound(id, profile.car(id).tune));
   },
-  onToast: (text) => toast(text),
+  onDrive: () => {
+    customize.close();
+    if (saved && world) {
+      state = 'drive';
+      startDriving(saved);
+      saved = null;
+    } else loadWorld(lastMode);
+  },
+  onBack: () => leaveCustomize(),
+  onToast: (t) => hud.toast(t),
+  onRev: () => { sound.start(); revTimer = 0.7; },
 });
+
+function leaveCustomize() {
+  customize.close();
+  if (saved && world) {
+    // Back to the pause menu, in the world, where you left.
+    state = 'pause';
+    setWorldVisible();
+    car.reset(saved.x, saved.z, saved.heading);
+    ground = world.flat ? null : groundPose(car.x, car.z, car.h);
+    car.spec = profile.spec();
+    saved = null;
+    screens.set('pause');
+    return;
+  }
+  state = 'menu';
+  screens.set('main');
+  renderMain();
+}
+
+function openCustomize(fromPause) {
+  if (fromPause) saved = { x: car.x, z: car.z, heading: car.h };
+  state = 'customize';
+  toShowroom();
+  customize.open(fromPause);
+  screens.set('customize');
+}
+
+let lastMode = 'open';
+function renderMain() {
+  const id = profile.current, def = carById(id);
+  const s = specStats(profile.spec(id));
+  $('main-car').textContent = def.name;
+  $('main-tag').textContent = def.tagline;
+  $('main-chips').innerHTML = [
+    [`${s.hp}`, 'hp'], [fmt.format(s.mass), 'kg'], [def.spec.awd ? 'AWD' : 'RWD', ''], [engineSound(id, profile.car(id).tune).toUpperCase(), ''],
+  ].map(([v, u]) => `<span class="chip">${v}${u ? ` <i>${u}</i>` : ''}</span>`).join('');
+  $('main-credits').textContent = `${fmt.format(profile.credits)} CR`;
+  $('btn-mute').textContent = sound.muted ? 'Sound off' : 'Sound on';
+}
+
+document.querySelector('.modes').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-mode]');
+  if (!b) return;
+  sound.start();
+  const m = b.dataset.mode;
+  if (b.dataset.soon !== undefined) { hud.toast(`${b.querySelector('.mode__name').firstChild.textContent.trim()} is coming soon`); return; }
+  if (m === 'customize') openCustomize(false);
+  else { lastMode = m; loadWorld(m); }
+});
+document.addEventListener('click', (e) => {
+  const o = e.target.closest('[data-open]');
+  if (o) { screens.push(o.dataset.open); return; }
+  const a = e.target.closest('[data-act]');
+  if (!a) return;
+  const act = a.dataset.act;
+  if (act === 'resume') resume();
+  else if (act === 'camera') { $('pause-cam').textContent = rig.cycle(); settings.set('camera', rig.id); }
+  else if (act === 'time') cycleTime();
+  else if (act === 'customize') openCustomize(true);
+  else if (act === 'respawn') { resume(); respawn(); }
+  else if (act === 'quit') quitToMenu();
+  else if (act === 'mute') toggleMute();
+  else if (act === 'close-settings') screens.back();
+});
+$('btn-pause').addEventListener('click', () => pause());
+screens.on('pause', { onBack: () => resume() });
+screens.on('customize', { onBack: () => leaveCustomize() });
+screens.on('main', { onBack: () => {} });
+screens.on('settings', { onShow: () => renderSettings() });
+screens.onExtra = (a) => {
+  if (screens.current === 'customize' && (a === 'tabPrev' || a === 'tabNext')) customize.stepTab(a === 'tabNext' ? 1 : -1);
+};
+
+function toggleMute() {
+  sound.start();
+  sound.setMuted(!sound.muted);
+  $('btn-mute').textContent = sound.muted ? 'Sound off' : 'Sound on';
+  return sound.muted ? 'Sound off' : 'Sound on';
+}
+
+const TIMES = [['cycle', 'Cycle'], ['day', 'Day'], ['dusk', 'Sunset'], ['night', 'Night']];
+function cycleTime(dir = 1) {
+  const i = TIMES.findIndex((t) => t[0] === settings.timeOfDay);
+  const next = TIMES[(i + dir + TIMES.length) % TIMES.length];
+  settings.set('timeOfDay', next[0]);
+  world?.setTimeOfDay?.(next[0]);
+  $('pause-time').textContent = next[1];
+  return next[1];
+}
+
+// Settings rows: each is a cycler (left/right or click) or a slider.
+const SETTINGS = [
+  { key: 'quality', label: 'Graphics', note: 'Auto picks for your device', opts: [['auto', 'Auto'], ...QUALITY_ORDER.map((q) => [q, q[0].toUpperCase() + q.slice(1)])] },
+  { key: 'camera', label: 'Camera', opts: CAMERAS.map((c) => [c.id, c.name]) },
+  { key: 'assist', label: 'Drift assist', note: 'Counter-steer and angle help', opts: ASSISTS.map(([n], i) => [i, n]) },
+  { key: 'gearbox', label: 'Gearbox', opts: [['auto', 'Automatic'], ['manual', 'Manual']] },
+  { key: 'units', label: 'Speed units', opts: [['kmh', 'km/h'], ['mph', 'mph']] },
+  { key: 'timeOfDay', label: 'Time of day', note: 'Open World', opts: TIMES },
+  { key: 'showFps', label: 'Show FPS', opts: [[false, 'Off'], [true, 'On']] },
+  { key: 'volume', label: 'Volume', range: [0, 1, 0.05] },
+];
+function settingValue(key) { return key === 'gearbox' ? (car.autoGear ? 'auto' : 'manual') : settings[key]; }
+function renderSettings() {
+  $('settings-rows').innerHTML = SETTINGS.map((s) => {
+    const label = `<div class="row__label"><b>${s.label}</b>${s.note ? `<span>${s.note}</span>` : ''}</div>`;
+    if (s.range) return `<div class="row">${label}<input type="range" data-nav data-setting="${s.key}" min="${s.range[0]}" max="${s.range[1]}" step="${s.range[2]}" value="${settingValue(s.key)}" style="--pct:${settingValue(s.key) * 100}%" aria-label="${s.label}"></div>`;
+    const cur = s.opts.find((o) => o[0] === settingValue(s.key)) || s.opts[0];
+    return `<div class="row">${label}<button class="cycler" type="button" data-nav data-setting="${s.key}" aria-label="${s.label}: ${cur[1]}"><i>◀</i><b>${cur[1]}</b><i>▶</i></button></div>`;
+  }).join('');
+}
+function changeSetting(key, dir) {
+  const s = SETTINGS.find((x) => x.key === key);
+  const i = s.opts.findIndex((o) => o[0] === settingValue(key));
+  const v = s.opts[(i + dir + s.opts.length) % s.opts.length][0];
+  if (key === 'gearbox') car.autoGear = v === 'auto';
+  else settings.set(key, v);
+  if (key === 'camera') rig.set(v);
+  if (key === 'assist') car.assist = ASSISTS[v][1];
+  if (key === 'timeOfDay') world?.setTimeOfDay?.(v);
+  if (key === 'quality') applyQuality();
+  const btn = $('settings-rows').querySelector(`[data-setting="${key}"]`);
+  btn.querySelector('b').textContent = s.opts.find((o) => o[0] === settingValue(key))[1];
+}
+$('settings-rows').addEventListener('click', (e) => {
+  const b = e.target.closest('.cycler');
+  if (b) changeSetting(b.dataset.setting, 1);
+});
+$('settings-rows').addEventListener('cycle', (e) => changeSetting(e.target.dataset.setting, e.detail));
+$('settings-rows').addEventListener('input', (e) => {
+  const r = e.target;
+  if (r.dataset.setting !== 'volume') return;
+  settings.set('volume', Number(r.value));
+  sound.setVolume(Number(r.value));
+  r.style.setProperty('--pct', `${Number(r.value) * 100}%`);
+});
+
+// A new graphics preset takes effect on the next world load; resolution and bloom change now.
+function applyQuality() {
+  preset = settings.preset;
+  pixelRatio = Math.min(devicePixelRatio || 1, preset.pixelRatio);
+  resize();
+  applyEnv(activeWorld());
+  hud.toast(`Graphics: ${preset.label}${world ? ' · full effect on next load' : ''}`);
+}
+
+// ---------- driving actions ----------
+function respawn() {
+  const p = world.nearestRoad(car.x, car.z, car.h);
+  car.reset(p.x, p.z, p.heading);
+  score.chain = 0;
+  score.mult = 1;
+  rig.snap(car);
+  world.onReset?.();
+  hud.toast('Back on the road');
+}
 
 function handleAction(a) {
-  if (garage.isOpen) {
-    if (a === 'help') garage.close();
+  if (screens.current) {
+    if (a === 'help' && screens.current === 'pause') { resume(); return; }
+    screens.action(a);
     return;
   }
-  if (a === 'help') { setPlaying(!playing); return; }
-  if (a === 'confirm') { if (!playing) setPlaying(true); return; }
-  if (!playing) return;
-  if (a === 'shiftUp') { car.shift(1); if (car.autoGear) toast('Manual gearbox'); car.autoGear = false; }
-  if (a === 'shiftDown') { car.shift(-1); if (car.autoGear) toast('Manual gearbox'); car.autoGear = false; }
-  if (a === 'camera') { cameraMode = (cameraMode + 1) % CAMERAS.length; toast(`Camera: ${CAMERAS[cameraMode]}`); }
-  if (a === 'reset') {
-    const p = nearestRoad(car.x, car.z, car.h);
-    car.reset(p.x, p.z, p.heading);
-    score.chain = 0;
-    score.mult = 1;
-    city.setPieces.resetCones();
-    toast('Back on the road');
+  if (state !== 'drive') return;
+  if (a === 'help') { pause(); return; }
+  if (a === 'shiftUp' || a === 'shiftDown') {
+    car.shift(a === 'shiftUp' ? 1 : -1);
+    if (car.autoGear) hud.toast('Manual gearbox · E / Q to shift');
+    car.autoGear = false;
   }
-  if (a === 'gearbox') toast(toggleGearbox());
-  if (a === 'assist') toast(cycleAssist());
-  if (a === 'paint') toast(nextPaint());
-  if (a === 'mute') $('btn-sound').click();
+  if (a === 'camera') { hud.toast(`Camera: ${rig.cycle()}`); settings.set('camera', rig.id); }
+  if (a === 'view') { hud.toast(rig.toggleView()); settings.set('camera', rig.id); }
+  if (a === 'reset') respawn();
+  if (a === 'gearbox') { car.autoGear = !car.autoGear; hud.toast(car.autoGear ? 'Automatic gearbox' : 'Manual gearbox · E / Q to shift'); }
+  if (a === 'assist') {
+    settings.set('assist', (settings.assist + 1) % ASSISTS.length);
+    car.assist = ASSISTS[settings.assist][1];
+    hud.toast(`Drift assist ${ASSISTS[settings.assist][0]}`);
+  }
+  if (a === 'mute') hud.toast(toggleMute());
 }
 
-// ---------- camera ----------
-const camPos = new THREE.Vector3();
-const camLook = new THREE.Vector3();
-let camYaw = 0;
-let camLean = 0;
-
-// Keeps the camera out of buildings: walks from the car toward the camera and stops before the first block.
-// Returns how far along it got (1 = clear).
-function inBlock(x, z, m) {
-  if (Math.abs(x) > HALF - m || Math.abs(z) > HALF - m) return true;
-  for (const b of SOLID_BLOCKS) if (x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m) return true;
-  return false;
-}
-function avoidWalls(pos) {
-  const dx = pos.x - car.x, dz = pos.z - car.z;
-  let t = 1;
-  for (let k = 1; k <= 16; k++) {
-    if (inBlock(car.x + (dx * k) / 16, car.z + (dz * k) / 16, 0.6)) { t = Math.max(0.2, (k - 1) / 16); break; }
-  }
-  pos.x = car.x + dx * t;
-  pos.z = car.z + dz * t;
-  return t;
-}
-
-function updateCamera(dt) {
-  // Debug: window.__cdFreeCam = { pos: [x, y, z], look: [x, y, z] } parks the camera anywhere.
-  const free = window.__cdFreeCam;
-  if (free) {
-    camera.position.set(...free.pos);
-    camera.lookAt(...free.look);
-    camera.fov = free.fov || 60;
-    camera.updateProjectionMatrix();
-    return;
-  }
-  const f = new THREE.Vector3(Math.sin(car.h), 0, Math.cos(car.h));
-  const carPos = new THREE.Vector3(car.x, 0, car.z);
-  // In the garage the panel covers one side, so shift the framing to centre the car in what is left.
-  if (garage.isOpen) {
-    const w = innerWidth, h = innerHeight;
-    if (w > 700) camera.setViewOffset(w, h, Math.min(420, w) / 2, 0, w, h);
-    else camera.setViewOffset(w, h, 0, (h * 0.62) / 2, w, h);
-  } else if (camera.view?.enabled) camera.clearViewOffset();
-  if (garage.isOpen || (!playing && !started)) {
-    // Showroom / attract mode: slow orbit around the parked car.
-    const near = garage.isOpen;
-    const a = clock * (near ? 0.25 : 0.18) + (window.__cdOrbit || 0);
-    const r = near ? (camera.aspect < 1 ? 10 : 6.2) : 9;
-    camera.position.set(car.x + Math.sin(a) * r, near ? 1.5 : 2.2, car.z + Math.cos(a) * r);
-    avoidWalls(camera.position);
-    camera.lookAt(car.x, near ? 0.6 : 0.9, car.z);
-    camera.fov = 50;
-    camera.updateProjectionMatrix();
-    camPos.set(0, 0, 0);
-    return;
-  }
-  if (cameraMode === 2) {
-    camera.position.copy(carPos).addScaledVector(f, 0.6).setY(1.05);
-    camera.lookAt(carPos.clone().addScaledVector(f, 20).setY(0.9));
-  } else {
-    // Swing toward the direction of travel so the car is framed side-on in a drift.
-    const velYaw = car.speed > 3 ? Math.atan2(car.vx, car.vz) : car.h;
-    let diff = velYaw - car.h;
-    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    const targetYaw = car.h + diff * 0.55;
-    let dy = targetYaw - camYaw;
-    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-    camYaw += dy * Math.min(1, dt * 5);
-    const far = cameraMode === 1;
-    const dist = (far ? 8.8 : 6.2) + Math.min(car.speed, 50) * 0.025;
-    const height = far ? 3.3 : 2.2;
-    const target = new THREE.Vector3(car.x - Math.sin(camYaw) * dist, height, car.z - Math.cos(camYaw) * dist);
-    // Backed against a wall: pull in and rise so the car stays in view instead of the camera entering a building.
-    const clear = avoidWalls(target);
-    target.y += (1 - clear) * 1.6;
-    if (camPos.lengthSq() === 0) camPos.copy(target);
-    camPos.lerp(target, 1 - Math.exp(-dt * 10));
-    avoidWalls(camPos);
-    camera.position.copy(camPos);
-    camLook.set(car.x + Math.sin(camYaw) * 3, 1.0, car.z + Math.cos(camYaw) * 3);
-    camera.lookAt(camLook);
-    // A slight lean against cornering load.
-    camLean = THREE.MathUtils.damp(camLean, THREE.MathUtils.clamp(-car.r * car.u * 0.0018, -0.035, 0.035), 4, dt);
-    camera.rotateZ(camLean);
-  }
-  // Fine high-speed buzz above 150 km/h.
-  const fast = Math.max(0, car.speed * 3.6 - 150) / 100;
-  if (fast > 0 && playing) {
-    camera.position.x += (Math.random() - 0.5) * 0.02 * fast;
-    camera.position.y += (Math.random() - 0.5) * 0.02 * fast;
-  }
-  if (shake > 0) {
-    camera.position.x += (Math.random() - 0.5) * shake;
-    camera.position.y += (Math.random() - 0.5) * shake;
-    shake = Math.max(0, shake - dt * 2.5);
-  }
-  const fov = 62 + Math.min(car.speed * 3.6, 220) * 0.07;
-  camera.fov += (fov - camera.fov) * Math.min(1, dt * 3);
-  camera.updateProjectionMatrix();
+// ---------- ground ----------
+// Height, pitch and roll of the ground under the car, and gravity's pull down the slope.
+const G = 9.81;
+function groundPose(x, z, h) {
+  const gh = (px, pz) => world.groundAt(px, pz);
+  const s = Math.sin(h), c = Math.cos(h);
+  const fx = x + s * 1.3, fz = z + c * 1.3, bx = x - s * 1.3, bz = z - c * 1.3;
+  const lx = x + c * 0.8, lz = z - s * 0.8, rx = x - c * 0.8, rz = z + s * 0.8;
+  const yF = gh(fx, fz), yB = gh(bx, bz), yL = gh(lx, lz), yR = gh(rx, rz);
+  const y = (yF + yB + yL + yR) / 4;
+  const pitch = -Math.atan2(yF - yB, 2.6);
+  const roll = Math.atan2(yL - yR, 1.6);
+  return { y, pitch, roll, dX: (gh(x + 1, z) - gh(x - 1, z)) / 2, dZ: (gh(x, z + 1) - gh(x, z - 1)) / 2 };
 }
 
 // ---------- effects ----------
-const tmp = new THREE.Vector3();
 const smokeAcc = [0, 0];
 function emitEffects(dt) {
   const sh = Math.sin(car.h), ch = Math.cos(car.h);
   const track = carView.rearTrack, back = -carView.rearZ;
+  const env = world.env;
+  const gy = ground ? ground.y : 0;
   for (const side of [-1, 1]) {
-    // Each rear tyre smokes and marks from its own sliding speed (index 2 is rear left, 3 rear right).
     const slip = Math.max(0, Math.min(1, (car.slip[side > 0 ? 2 : 3] - 2) / 9)) * Math.min(1, car.speed / 4);
     const wx = car.x + ch * side * track - sh * back;
     const wz = car.z - sh * side * track - ch * back;
-    skids.mark(side, wx, wz, slip > 0.08 ? 0.22 + slip * 0.45 : 0, clock);
-    // Thick billowing smoke: up to ~80 puffs a second per tyre, carried along with the car a little.
-    smokeAcc[side > 0 ? 1 : 0] += slip * slip * dt * 80;
-    while (smokeAcc[side > 0 ? 1 : 0] >= 1) {
-      smokeAcc[side > 0 ? 1 : 0] -= 1;
+    const offroad = car.grip < 0.9;
+    skids.mark(side, wx, wz, slip > 0.08 && !offroad ? 0.22 + slip * 0.45 : 0, clock, 0.25, gy + 0.03);
+    // Thick billowing smoke (dust off the road), carried along with the car a little.
+    const k = side > 0 ? 1 : 0;
+    smokeAcc[k] += slip * slip * dt * (preset.particles / 25);
+    while (smokeAcc[k] >= 1) {
+      smokeAcc[k] -= 1;
       const j = Math.random();
-      particles.emit(wx - sh * j * 0.4, 0.3, wz - ch * j * 0.4, car.vx * 0.3 + (Math.random() - 0.5) * 2.4, 0.4 + Math.random() * 0.6,
-        car.vz * 0.3 + (Math.random() - 0.5) * 2.4, 1.0 + Math.random() * 0.4, 2.6, 2.2 + Math.random() * 1.4, 0.3);
+      particles.emit(wx - sh * j * 0.4, gy + 0.3, wz - ch * j * 0.4, car.vx * 0.3 + (Math.random() - 0.5) * 2.4, 0.4 + Math.random() * 0.6,
+        car.vz * 0.3 + (Math.random() - 0.5) * 2.4, 1.0 + Math.random() * 0.4, 2.6, 2.2 + Math.random() * 1.4, offroad ? 0.22 : 0.3);
     }
-    // Wet road spray behind the tyres.
-    if (car.speed > 10 && Math.random() < Math.min(1, car.speed / 40) * dt * 40) {
-      particles.emit(wx, 0.25, wz, car.vx * 0.5 + (Math.random() - 0.5) * 3, 1.2, car.vz * 0.5 + (Math.random() - 0.5) * 3, 0.5, 1.6, 0.6, 0.22);
+    // Road spray when it is wet.
+    if (env.wet && car.speed > 10 && Math.random() < Math.min(1, car.speed / 40) * dt * 40 * env.wet) {
+      particles.emit(wx, gy + 0.25, wz, car.vx * 0.5 + (Math.random() - 0.5) * 3, 1.2, car.vz * 0.5 + (Math.random() - 0.5) * 3, 0.5, 1.6, 0.6, 0.22);
     }
   }
-}
-
-// Steam drifting up out of the manholes near the camera.
-let steamAcc = 0;
-function emitSteam(dt) {
-  steamAcc += dt * 9;
-  while (steamAcc >= 1) {
-    steamAcc -= 1;
-    const v = city.steam[Math.floor(Math.random() * city.steam.length)];
-    if (!v || Math.hypot(v.x - camera.position.x, v.z - camera.position.z) > 70) continue;
-    particles.emit(v.x + (Math.random() - 0.5) * 0.6, 0.1, v.z + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.4, 1.1 + Math.random() * 0.6, (Math.random() - 0.5) * 0.4, 0.8, 1.6, 2.5 + Math.random(), 0.16);
-  }
-}
-
-function updateWeather(dt) {
-  nextLightning -= dt;
-  if (nextLightning <= 0) {
-    flash = 1;
-    nextLightning = 15 + Math.random() * 30;
-    sound.thunder(0.6 + Math.random() * 1.5);
-  }
-  const flicker = flash > 0 ? flash * (0.6 + 0.4 * Math.sin(clock * 60)) : 0;
-  flash = Math.max(0, flash - dt * 2.2);
-  hemi.intensity = 0.9 + flicker * 3;
-  rain.material.uniforms.uFlash.value = flicker;
-  rain.material.uniforms.uTime.value = clock;
-  rain.material.uniforms.uCam.value.copy(camera.position);
-  refl.uniforms.uTime.value = clock;
-  city.update(clock, camera, flicker);
 }
 
 // ---------- loop ----------
 const STEP = 1 / 120;
 let acc = 0;
 let prev = performance.now();
-let perfTime = 0, perfFrames = 0;
-const idleInput = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+let perfTime = 0, perfFrames = 0, fpsShown = 0;
+const idleInput = { throttle: 0, brake: 0, steer: 0, handbrake: true, clutch: true };
+let rumbleTimer = 0;
+
+function stepDrive(dt, controls) {
+  acc += dt;
+  let impact = 0;
+  while (acc >= STEP) {
+    if (!world.flat) {
+      ground = groundPose(car.x, car.z, car.h);
+      // Gravity along the slope: g·sinθ·cosθ in the direction the ground falls away.
+      const k = G / (1 + ground.dX * ground.dX + ground.dZ * ground.dZ);
+      car.gx = -ground.dX * k;
+      car.gz = -ground.dZ * k;
+    }
+    world.surface?.(car);
+    car.step(STEP, controls);
+    impact = Math.max(impact, world.collide(car));
+    acc -= STEP;
+  }
+  if (impact > 3) {
+    sound.crash(impact);
+    rig.shake = Math.min(0.6, impact * 0.05);
+    input.rumble(Math.min(1, impact * 0.12), 0.6, 220);
+  }
+  rumbleTimer -= dt;
+  if (score.angle > 0 && rumbleTimer <= 0) {
+    input.rumble(0, Math.min(0.5, 0.12 + score.angle / 180), 120);
+    rumbleTimer = 0.1;
+  }
+  score.update(dt, car, impact);
+  for (const e of score.takeEvents()) {
+    if (e.type === 'bank') {
+      const cr = profile.earn(e.points);
+      hud.banner(`+${fmt.format(e.points)}${e.record ? ' · new best' : ''}  +${fmt.format(cr)} CR`, 'bank');
+      world.onBank?.(e.points);
+    } else hud.banner(`Crashed  −${fmt.format(Math.round(e.points))}`, 'crash');
+  }
+  sound.update(car, dt);
+  emitEffects(dt);
+}
 
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - prev) / 1000);
   prev = now;
   clock += dt;
+  frameNo++;
 
+  input.menuMode = !!screens.current;
   const controls = input.poll(dt);
   for (const a of input.takeActions()) handleAction(a);
 
-  if (playing) {
+  const driving = state === 'drive';
+  if (driving) stepDrive(dt, controls);
+  else if (state === 'menu' || state === 'customize') {
+    // In the showroom the car idles in neutral; "Rev it" blips the throttle.
+    revTimer -= dt;
+    idleInput.throttle = revTimer > 0 ? 1 : 0;
     acc += dt;
-    let impact = 0;
-    while (acc >= STEP) {
-      car.step(STEP, controls);
-      impact = Math.max(impact, collide(car));
-      acc -= STEP;
-    }
-    if (impact > 3) {
-      sound.crash(impact);
-      shake = Math.min(0.6, impact * 0.05);
-      input.rumble(Math.min(1, impact * 0.12), 0.6, 220);
-    }
-    // Light tyre buzz through the controller while sideways.
-    rumbleTimer -= dt;
-    if (score.angle > 0 && rumbleTimer <= 0) {
-      input.rumble(0, Math.min(0.5, 0.12 + score.angle / 180), 120);
-      rumbleTimer = 0.1;
-    }
-    score.update(dt, car, impact);
-    for (const e of score.takeEvents()) {
-      if (e.type === 'bank') {
-        const cr = profile.earn(e.points);
-        banner(`+${fmt.format(e.points)}${e.record ? ' · NEW BEST' : ''}  +${fmt.format(cr)} CR`, 'bank');
-      }
-      else banner(`CRASHED  −${fmt.format(Math.round(e.points))}`, 'crash');
-    }
+    while (acc >= STEP) { car.step(STEP, idleInput); acc -= STEP; }
+    car.x = 0; car.z = 0; car.vx = 0; car.vz = 0; car.r = 0; car.h = showroom.spawn.heading;
     sound.update(car, dt);
-    emitEffects(dt);
-  } else if (!started) {
-    car.step(STEP, idleInput);
   }
 
-  carView.update(car, dt);
-  emitSteam(dt);
-  city.setPieces.update(clock, dt, playing ? car : null, sound);
-  particles.update(dt);
-  skids.update(clock);
-  updateCamera(dt);
-  updateWeather(dt);
-  if (started) updateHud();
+  if (carView) carView.update(car, dt, driving || state === 'pause' ? ground : null);
+  const inWorld = (driving || state === 'pause') && world;
+  if (inWorld) {
+    world.update(clock, dt, { camera, car, playing: driving, carView, hud, score, profile, sound, scene, renderer, applyEnv: () => applyEnv(world) });
+    particles.update(dt);
+    skids.update(clock);
+    rig.update(dt, car, carView, world, ground, driving);
+    if (driving) hud.update(dt, { car, score, profile, settings, world });
+  } else {
+    showroom.update(clock);
+    particles.update(dt);
+    if (camera.view?.enabled) camera.clearViewOffset();
+    showroom.camera(clock, state === 'customize' ? 'customize' : 'menu', camera);
+    // Frame the car in the space the panel leaves.
+    if (state === 'customize') {
+      const w = innerWidth, h = innerHeight;
+      if (w > 700) camera.setViewOffset(w, h, Math.min(480, w) / 2, 0, w, h);
+      else camera.setViewOffset(w, h, 0, (h * 0.64) / 2, w, h);
+    } else if (state === 'menu' && innerWidth > 860) camera.setViewOffset(innerWidth, innerHeight, -innerWidth * 0.14, 0, innerWidth, innerHeight);
+    camera.fov = 42;
+    camera.near = 0.1;
+    camera.up.set(0, 1, 0);
+    camera.updateProjectionMatrix();
+  }
+  if (inWorld && camera.view?.enabled) { camera.clearViewOffset(); camera.updateProjectionMatrix(); }
 
-  refl.render(renderer, scene, camera);
-  composer.render();
+  if (inWorld) world.render?.(renderer, scene, camera, frameNo);
+  if (bloom.enabled) composer.render();
+  else renderer.render(scene, camera);
 
-  // Drop resolution if the device cannot keep up.
+  // Resolution follows the frame rate: drop when the device cannot keep up, recover when it can.
   perfTime += dt;
   perfFrames++;
-  if (perfTime > 3) {
+  if (perfTime > 2) {
     const fps = perfFrames / perfTime;
-    if (fps < 38 && pixelRatio > 0.75) {
-      pixelRatio = Math.max(0.75, pixelRatio - 0.25);
-      resize();
-    }
+    fpsShown = fps;
+    const top = Math.min(devicePixelRatio || 1, preset.pixelRatio);
+    if (fps < 40 && pixelRatio > 0.6) { pixelRatio = Math.max(0.6, pixelRatio - 0.15); resize(); }
+    else if (fps > 57 && pixelRatio < top) { pixelRatio = Math.min(top, pixelRatio + 0.1); resize(); }
     perfTime = 0;
     perfFrames = 0;
   }
+  hud.fps(settings.showFps && driving ? `${Math.round(fpsShown)} fps · ${pixelRatio.toFixed(2)}x · ${renderer.info.render.calls} draws` : '');
 }
 
 input.onPadStatus = (status, id = '') => {
   const name = id.replace(/\s*\(.*$/, '').slice(0, 40) || 'Controller';
   const line = $('pad-status');
-  if (status === 'connected') {
-    line.textContent = `${name} connected · press A to drive`;
-    toast(`${name} connected`);
-  } else if (status === 'disconnected') {
-    line.textContent = 'Controller disconnected';
-    toast('Controller disconnected');
-  } else {
-    line.textContent = 'This view blocks controllers. Open the game in its own browser tab to use one.';
-  }
+  if (status === 'connected') { line.textContent = `${name} connected`; hud.toast(`${name} connected`); }
+  else if (status === 'disconnected') { line.textContent = 'Controller disconnected'; hud.toast('Controller disconnected'); }
+  else line.textContent = 'This view blocks controllers. Open the game in its own browser tab to use one.';
 };
-window.__cd = { car, score, input, profile, garage, skids, renderer, scene, city }; // handy from the console
-$('boot').remove();
-menu.hidden = false;
-syncOptions();
+addEventListener('pointerdown', () => sound.start(), { once: true });
+addEventListener('keydown', () => sound.start(), { once: true });
+car.autoGear = settings.gearbox !== 'manual';
+
+window.__cd = { get carView() { return carView; }, camera, composer, bloom, car, score, input, profile, renderer, scene, settings, get world() { return world; }, loadWorld, showroom, rig, screens, customize };
+
+// Boot straight into the main menu in the showroom.
+state = 'menu';
+showCar(profile.current);
+toShowroom();
+resize();
+renderMain();
+$('loader').hidden = true;
+screens.set('main');
 requestAnimationFrame(frame);
