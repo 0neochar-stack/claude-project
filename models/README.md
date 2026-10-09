@@ -60,4 +60,9 @@ they need the author's name in the game's credits if they ship.
 | props/traffic_light_b.glb | "Traffic light" by Poly by Google (**credit**) | 1.1k triangles |
 | props/stop_sign.glb | "Stop sign" by Poly by Google (**credit**) | 236 triangles |
 | props/box.glb | "Box" by Kay Lousberg | 32 triangles |
-| props/mailbox.glb | "Mailbox" by J-Toastie (**credit**) | 328 triangles |
+| props/mailbox_a.glb | "Mailbox" by J-Toastie (**credit**) | 328 triangles |
+| props/hydrant.glb | "Hydrant" by Jason Wilhelm (**credit**) | 1.3k triangles |
+| props/mailbox_b.glb | "Mailbox" by Poly by Google (**credit**) | 564 triangles, textured |
+| props/fence.glb | "Fence" by J-Toastie (**credit**) | 1k triangles |
+| props/traffic_barrier.glb | "Traffic Barrier" by Quaternius | 364 triangles |
+| props/bus_stop_sign.glb | "Bus stop sign" by dook (**credit**) | 1.5k triangles |
