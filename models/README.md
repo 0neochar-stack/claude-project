@@ -61,8 +61,13 @@ they need the author's name in the game's credits if they ship.
 | props/stop_sign.glb | "Stop sign" by Poly by Google (**credit**) | 236 triangles |
 | props/box.glb | "Box" by Kay Lousberg | 32 triangles |
 | props/mailbox_a.glb | "Mailbox" by J-Toastie (**credit**) | 328 triangles |
-| props/hydrant.glb | "Hydrant" by Jason Wilhelm (**credit**) | 1.3k triangles |
+| props/hydrant_a.glb | "Hydrant" by Jason Wilhelm (**credit**) | 1.3k triangles |
 | props/mailbox_b.glb | "Mailbox" by Poly by Google (**credit**) | 564 triangles, textured |
 | props/fence.glb | "Fence" by J-Toastie (**credit**) | 1k triangles |
 | props/traffic_barrier.glb | "Traffic Barrier" by Quaternius | 364 triangles |
 | props/bus_stop_sign.glb | "Bus stop sign" by dook (**credit**) | 1.5k triangles |
+| buildings/big_building.glb | "Big Building" by Quaternius | 7k triangles |
+| buildings/large_building_kenney.glb | "Large Building" by Kenney | 2.4k triangles |
+| buildings/tron_cityscape.glb | "troncityscape1_FV7" by Fragmastre TV (**credit**) | highrise, 82k triangles, needs simplifying |
+| roads/road_kit_kenney.glb | "Modular Road Kit" by Kenney | 43 road and tile pieces, 11.8k triangles |
+| props/hydrant_b.glb | "Fire Hydrant" by Poly by Google (**credit**) | 740 triangles, textured |
