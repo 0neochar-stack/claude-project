@@ -12,6 +12,7 @@ import { buildLamps } from './lamps.js';
 import { Traffic } from './traffic.js';
 import { Police } from './police.js';
 import { Knockables } from './knockables.js';
+import { buildLandmarks } from './landmarks.js';
 import { disposeTree } from '../util.js';
 
 const HULL = [{ o: 1.3, r: 1.0 }, { o: -1.3, r: 1.0 }];
@@ -50,6 +51,8 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   await progress(0.66, 'Planting palms, pines and cherry trees…');
   const nature = buildNature(net, heights, preset, { yardTrees: town.yardTrees, sakuraSpots: town.sakuraSpots, rocks: water.rocks });
   root.add(nature.group);
+  const marks = buildLandmarks(net, heights);
+  root.add(marks.group);
   await progress(0.8, 'Wiring the street lights…');
   const lamps = buildLamps(roads.lamps, town.lamps, preset, groundAt);
   root.add(lamps.group);
@@ -147,7 +150,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   const CC = 32;
   const cells = new Map();
   const key = (cx, cz) => cx * 4096 + cz;
-  const colliders = [...roads.segs.map((s) => ({ type: 'seg', ...s })), ...town.colliders, ...nature.colliders, ...lamps.colliders];
+  const colliders = [...roads.segs.map((s) => ({ type: 'seg', ...s })), ...town.colliders, ...nature.colliders, ...lamps.colliders, ...marks.colliders];
   colliders.forEach((c, idx) => {
     let x0, x1, z0, z1;
     if (c.type === 'seg') { x0 = Math.min(c.ax, c.bx) - 2; x1 = Math.max(c.ax, c.bx) + 2; z0 = Math.min(c.az, c.bz) - 2; z1 = Math.max(c.az, c.bz) + 2; }
@@ -281,10 +284,10 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       }
     }
     const fwd = Math.sin(heading) * best.tx + Math.cos(heading) * best.tz >= 0 ? 1 : -1;
-    // Keep to the right-hand lane.
-    const lane = best.road.lanes >= 4 ? 5.3 : 2;
+    // Your own lane: the right in America, the left on the Japanese roads. (-tz, tx) is the driver's right.
+    const lane = (best.road.lanes >= 4 ? 5.3 : 2) * (['village', 'touge', 'ridge', 'pier'].includes(best.road.kind) ? -1 : 1);
     const tx = best.tx * fwd, tz = best.tz * fwd;
-    return { x: best.x + tz * lane, z: best.z - tx * lane, heading: Math.atan2(tx, tz) };
+    return { x: best.x - tz * lane, z: best.z + tx * lane, heading: Math.atan2(tx, tz) };
   }
 
   function placeInfo(car) {
@@ -364,6 +367,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       lamps.update(camPos);
       roads.update(camPos);
       town.update(t, camPos);
+      marks.update(t, sky.state.night);
       bins.update(dt);
       if (playing) {
         traffic.update(dt, car, camPos, sky.state.night);
@@ -377,7 +381,8 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       ctx.applyEnv();
     },
     onBank(points) { police.onDrift(points, sky.state.night); },
-    onReset() { police.reset(); bins.reset(); traffic.reset?.(); },
+    // Back on the road keeps any chase going; a fresh start clears everything.
+    onReset(kind) { if (kind !== 'respawn') { police.reset(); traffic.reset?.(); } bins.reset(); },
     resize() {},
     dispose() {
       disposeTree(root);

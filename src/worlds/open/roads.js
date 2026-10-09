@@ -43,7 +43,27 @@ const MARKS = {
   village: [[-3.5, 0.12, 'w', 0], [3.5, 0.12, 'w', 0], [0, 0.1, 'w', 1.5]],
   touge: [[-3.75, 0.15, 'w', 0], [3.75, 0.15, 'w', 0], [-0.08, 0.1, 'y', 0], [0.08, 0.1, 'y', 0]],
   ridge: [[-4.25, 0.15, 'w', 0], [4.25, 0.15, 'w', 0], [0, 0.12, 'y', 4]],
+  pier: [],
 };
+
+// Weathered timber decking laid across the pier.
+function plankTexture(g, W, H, seed) {
+  const r = rng(seed);
+  const board = H / 96;
+  for (let y = 0; y < H; y += board) {
+    const v = 120 + r() * 50;
+    g.fillStyle = `rgb(${v},${v * 0.82},${v * 0.62})`;
+    g.fillRect(0, y, W, board);
+    g.fillStyle = 'rgba(30,20,12,0.7)';
+    g.fillRect(0, y, W, 1.5);
+    for (let k = 0; k < 6; k++) { g.fillStyle = `rgba(60,40,25,${r() * 0.25})`; g.fillRect(r() * W, y + r() * board, 20 + r() * 80, 1); }
+    // Butt joints and nail heads.
+    const j = r() * W;
+    g.fillStyle = 'rgba(20,14,8,0.8)'; g.fillRect(j, y, 2, board);
+    g.fillStyle = 'rgba(40,40,44,0.8)';
+    for (const x of [W * 0.12, W * 0.5, W * 0.88]) g.fillRect(x, y + board * 0.3, 2, 2);
+  }
+}
 
 function roadTexture(kind, width, seed) {
   const W = 512, H = 1024;
@@ -51,13 +71,14 @@ function roadTexture(kind, width, seed) {
   cv.width = W;
   cv.height = H;
   const g = cv.getContext('2d');
-  asphaltBase(g, W, H, seed, kind === 'highway' ? 52 : kind === 'touge' || kind === 'ridge' ? 42 : 48);
+  if (kind === 'pier') plankTexture(g, W, H, seed);
+  else asphaltBase(g, W, H, seed, kind === 'highway' ? 52 : kind === 'touge' || kind === 'ridge' ? 42 : 48);
   const pxm = W / width, pym = H / TEX_LEN;
   const X = (lat) => W / 2 - lat * pxm;
   // Polished wheel tracks.
   g.fillStyle = 'rgba(20,20,24,0.18)';
   const lanes = kind === 'highway' ? [-6.3, -2.7, 2.7, 6.3] : kind === 'boulevard' ? [-7, -3.5, 3.5, 7] : [-width / 4, width / 4];
-  for (const c of lanes) for (const o of [-0.8, 0.8]) g.fillRect(X(c + o) - 0.3 * pxm, 0, 0.6 * pxm, H);
+  if (kind !== 'pier') for (const c of lanes) for (const o of [-0.8, 0.8]) g.fillRect(X(c + o) - 0.3 * pxm, 0, 0.6 * pxm, H);
   // Drift marks on the mountain roads: long black arcs where the line goes.
   if (kind === 'touge' || kind === 'ridge') {
     const r = rng(seed + 9);
@@ -208,7 +229,7 @@ export function buildRoads(net, heights, preset) {
     if (!strips[r.kind]) {
       strips[r.kind] = new Strip();
       mats[r.kind] = new THREE.MeshStandardMaterial({
-        map: roadTexture(r.kind, r.width, 11 + ri), roughness: 0.82, metalness: 0,
+        map: roadTexture(r.kind, r.width, 11 + ri), roughness: r.kind === 'pier' ? 0.9 : 0.82, metalness: 0,
         polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -offsets[r.kind],
       });
     }
@@ -287,7 +308,7 @@ export function buildRoads(net, heights, preset) {
           const turn = (a.tx * b.tz - a.tz * b.tx) * side;
           const tight = turn < -0.02;
           const near = onOtherRoad(net, p.x + nx * (railOff + 0.5), p.z + nz * (railOff + 0.5), r, 2) || net.lots.some((l) => inLot(l, p.x + nx * (railOff + 1), p.z + nz * (railOff + 1), 2));
-          if ((drop > 1.2 || tight) && !near) (railRun ||= []).push(p);
+          if ((drop > 1.2 || tight || r.railAlways) && !near) (railRun ||= []).push(p);
           else endRail();
         }
         endRail();
@@ -336,11 +357,11 @@ export function buildRoads(net, heights, preset) {
       for (let s = r.lights * 0.5; s < r.length - 4; s += r.lights) {
         const i = Math.min(S.length - 1, Math.round(s / 3));
         const p = S[i];
-        const style = r.kind === 'village' ? 'lantern' : r.kind === 'highway' ? 'twin' : r.kind === 'touge' || r.kind === 'ridge' ? 'mountain' : 'cobra';
-        const off = style === 'twin' ? 0 : r.hw + (r.sidewalk ? r.sidewalk - 0.6 : r.gutter ? r.gutter + 0.9 : 1.2);
+        const style = r.kind === 'village' ? 'lantern' : r.kind === 'highway' ? 'twin' : r.kind === 'touge' || r.kind === 'ridge' ? 'mountain' : r.kind === 'pier' ? 'lot' : 'cobra';
+        const off = style === 'twin' ? 0 : r.kind === 'pier' ? r.hw - 0.5 : r.hw + (r.sidewalk ? r.sidewalk - 0.6 : r.gutter ? r.gutter + 0.9 : 1.2);
         const x = p.x - p.tz * off * side, z = p.z + p.tx * off * side;
         if (style !== 'twin' && onOtherRoad(net, x, z, r, 1.5)) continue;
-        lamps.push({ x, y: style === 'twin' ? p.y + 0.85 : heightAt(heights, x, z), z, nx: p.tz * side, nz: -p.tx * side, style, road: r, arm: style === 'twin' ? r.hw * 0.42 : 2.2 });
+        lamps.push({ x, y: style === 'twin' ? p.y + 0.85 : r.kind === 'pier' ? p.y : heightAt(heights, x, z), z, nx: p.tz * side, nz: -p.tx * side, style, road: r, arm: style === 'twin' ? r.hw * 0.42 : 2.2 });
         if (r.kind !== 'boulevard' && r.kind !== 'highway') side = rnd() < 0.85 ? -side : side;
       }
     }

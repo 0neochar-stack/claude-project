@@ -192,7 +192,7 @@ function startDriving(at) {
   score.chain = 0;
   score.mult = 1;
   rig.snap(car);
-  world.onReset?.();
+  world.onReset?.('start');
   enterDrive();
 }
 
@@ -428,7 +428,7 @@ function respawn() {
   score.chain = 0;
   score.mult = 1;
   rig.snap(car);
-  world.onReset?.();
+  world.onReset?.('respawn');
   hud.toast('Back on the road');
 }
 

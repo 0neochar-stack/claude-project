@@ -171,7 +171,8 @@ export function buildTown(net, heights, preset) {
       // Now and then a car parked at the curb.
       if (kind !== 'beach' && R() < 0.14) {
         const px = cx + (R() - 0.5) * 6;
-        parkCar(px, roadZ + roadSide * side * (hw - 1.3), side > 0 ? -Math.PI / 2 : Math.PI / 2);
+        // Parked with the traffic: on the north side of an east-west street that means facing east.
+        parkCar(px, roadZ + roadSide * side * (hw - 1.3), side > 0 ? Math.PI / 2 : -Math.PI / 2);
       }
     }
   };

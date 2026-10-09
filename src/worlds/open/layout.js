@@ -103,7 +103,10 @@ export const KINDS = {
   village: { width: 7.5, lanes: 2, follow: true, gutter: 0.45, lights: 26, blend: 10, speed: 10 },
   touge: { width: 8, lanes: 2, follow: false, grade: 0.12, smooth: 70, gutter: 0.45, lights: 55, blend: 7, rails: true, speed: 15 },
   ridge: { width: 9, lanes: 2, follow: false, grade: 0.1, smooth: 120, gutter: 0.45, lights: 70, blend: 12, rails: true, speed: 22 },
+  // Out over the water on pilings: flat, planked, railed, and never stamped into the sea floor.
+  pier: { width: 13, lanes: 2, follow: false, flat: true, noStamp: true, lights: 24, blend: 0, rails: true, railAlways: true, speed: 8 },
 };
+export const PIER_X = -1262;
 
 const AVENUES = [-1820, -1660, -1500, -1340, -1180, -1020, -860, -700];
 const STREETS = [-1420, -1260, -1100, -780, -620, -460];
@@ -118,6 +121,7 @@ export const ROAD_DEFS = [
   { id: 'hwy', name: 'Route 7', kind: 'highway', pts: [[-700, BOULEVARD_Z], [-300, BOULEVARD_Z], [200, -935], [600, -900], [900, -720], [1100, -420], [1180, -60], [1205, 300], [1230, 470], [1240, 610]] },
   { id: 'vmain', name: 'Sakura-dori', kind: 'village', pts: [[1040, 610], [1240, 610], [1460, 610]] },
   { id: 'vside', name: 'Kawa-michi', kind: 'village', pts: [[1120, 520], [1130, 610], [1120, 700]] },
+  { id: 'pier', name: 'Del Mar Pier', kind: 'pier', pts: [[PIER_X, PCH_Z], [PIER_X, -1700], [PIER_X, -1880]] },
   {
     id: 'touge', name: 'Kurogane Touge', kind: 'touge',
     pts: [[1240, 610], [1242, 720], [1246, 800], [1185, 860], [1085, 900], [1010, 948], [998, 985], [1040, 1010], [1150, 1030], [1300, 1052], [1430, 1082], [1500, 1122], [1512, 1158], [1470, 1186], [1350, 1212], [1200, 1242], [1080, 1282], [1030, 1322], [1046, 1352], [1100, 1366], [1210, 1392], [1335, 1424], [1452, 1466], [1520, 1512], [1540, 1548], [1500, 1586], [1400, 1616], [1300, 1640]],
@@ -261,6 +265,11 @@ export function buildNetwork() {
     const gy = profile(g.samples, g.kind, byId.touge.samples[byId.touge.samples.length - 1].y, at('hwy', end.x, end.z));
     g.samples.forEach((p, i) => { p.y = gy[i]; });
   }
+  // The pier sits level with the coast road where it leaves it.
+  {
+    const r = byId.pier, start = r.samples[0];
+    r.samples.forEach((p) => { p.y = at('pch', start.x, start.z); });
+  }
   // Lot heights from the road they open onto.
   for (const lot of LOTS) {
     const r = byId[lot.road];
@@ -334,7 +343,21 @@ export function bakeHeights(net) {
   }
   const w = new Float32Array(n * n);
   const ry = new Float32Array(n * n);
+  // Roads on stilts (the pier) only cut the ground away under them, never build it up.
   for (const r of net.roads) {
+    if (!r.noStamp) continue;
+    const core = r.hw + CELL;
+    for (const p of r.samples) {
+      const i0 = Math.max(0, Math.floor((p.x - core + HALF) / CELL)), i1 = Math.min(N, Math.ceil((p.x + core + HALF) / CELL));
+      const j0 = Math.max(0, Math.floor((p.z - core + HALF) / CELL)), j1 = Math.min(N, Math.ceil((p.z + core + HALF) / CELL));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const k = j * n + i;
+        if (Math.hypot(-HALF + i * CELL - p.x, -HALF + j * CELL - p.z) <= core) h[k] = Math.min(h[k], p.y - 0.6);
+      }
+    }
+  }
+  for (const r of net.roads) {
+    if (r.noStamp) continue;
     // Flat out to a cell and a bit past the edge, so the terrain's 4 m grid never pokes up through the road.
     const core = r.hw + (r.sidewalk || r.shoulder || 0) + (r.gutter ? r.gutter + 0.6 : 0) + CELL * 0.8;
     const reach = core + r.blend;

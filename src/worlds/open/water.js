@@ -87,7 +87,7 @@ const oceanFrag = /* glsl */ `
     col += uSunCol * spec * smoothstep(-0.05, 0.05, uSun.y);
     // Moonlight glitter at night.
     vec3 hm = normalize(normalize(vec3(-0.4, 0.45, -0.8)) + v);
-    col += vec3(0.5, 0.6, 0.9) * pow(max(dot(n, hm), 0.0), 300.0) * 2.0 * uNight;
+    col += vec3(0.5, 0.6, 0.9) * pow(max(dot(n, hm), 0.0), 500.0) * 1.1 * uNight;
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>

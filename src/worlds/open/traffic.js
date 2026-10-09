@@ -5,8 +5,10 @@ import * as THREE from 'three';
 import { carLowGeometry } from '../../car.js';
 import { CARS } from '../../garage.js';
 
-// Lane centres from the road's centre line, for each direction (right-hand traffic).
+// Lane centres from the road's centre line, for each direction. America drives on the right; the
+// Japanese roads (village, touge, ridge) keep left, like Japan.
 const LANES = { street: [1.9], boulevard: [3.4, 6.9], coast: [2.5], highway: [2.7, 6.3], village: [1.9], touge: [2.0], ridge: [2.3] };
+const KEEP_LEFT = new Set(['village', 'touge', 'ridge']);
 const PAINTS = [0xf2f2f2, 0x111214, 0x9a9ea4, 0x5a5e66, 0x1c2a48, 0x7a1a1a, 0xc8b89a, 0x2a4a3a, 0xe8e8e8, 0x2a2a2e];
 
 export class Traffic {
@@ -114,7 +116,8 @@ export class Traffic {
         c.v += Math.max(-9 * dt, Math.min(2.6 * dt, want - c.v));
         c.s += c.dir * c.v * dt;
         this.sample(c.road, c.s, p);
-        const lat = -c.lane * c.dir;
+        // (-tz, tx) points to the driver's right when facing along the road, so right-hand traffic takes +lat.
+        const lat = c.lane * c.dir * (KEEP_LEFT.has(c.road.kind) ? -1 : 1);
         c.x = p.x - p.tz * lat;
         c.z = p.z + p.tx * lat;
         c.h = Math.atan2(p.tx * c.dir, p.tz * c.dir);
