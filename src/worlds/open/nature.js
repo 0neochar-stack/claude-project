@@ -294,7 +294,7 @@ export function buildNature(net, heights, preset, extra = {}) {
   const blvd = net.byId.blvd;
   for (let s = 8; s < blvd.length; s += 15) {
     const p = blvd.samples[Math.round(s / 3)];
-    if (Math.abs(p.x + 1020) < 14 || nearCross(net, p.x, p.z, blvd)) continue;
+    if (Math.abs(p.x + 1020) < 14 || nearCross(net, p.x, p.z, blvd) || net.lots.some((l) => l.gaps.some((g) => g.road === 'blvd' && p.s >= g.s0 - 6 && p.s <= g.s1 + 6))) continue;
     add('palm', p.x, p.z, 0.95 + R() * 0.25, R() * 6.28, 2);
   }
   const pch = net.byId.pch;

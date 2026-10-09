@@ -319,8 +319,9 @@ export function buildRoads(net, heights, preset) {
     if (r.median) {
       const rowsM = [], rowsG = [];
       const mh = r.median / 2;
+      const opening = (p) => onOtherRoad(net, p.x, p.z, r, 0.5) || inGap(net, r, 1, p.s) || inGap(net, r, -1, p.s);
       for (const p of S) {
-        if (onOtherRoad(net, p.x, p.z, r, 0.5)) { if (rowsM.length > 1) { median.rows(rowsM.splice(0)); medianGrass.rows(rowsG.splice(0)); } rowsM.length = 0; rowsG.length = 0; continue; }
+        if (opening(p)) { if (rowsM.length > 1) { median.rows(rowsM.splice(0)); medianGrass.rows(rowsG.splice(0)); } rowsM.length = 0; rowsG.length = 0; continue; }
         const nx = -p.tz, nz = p.tx, y = p.y + 0.02;
         rowsM.push([[p.x - nx * mh, y, p.z - nz * mh, 0, p.s], [p.x - nx * mh, y + 0.2, p.z - nz * mh, 0.2, p.s], [p.x + nx * mh, y + 0.2, p.z + nz * mh, 0.4, p.s], [p.x + nx * mh, y, p.z + nz * mh, 0.6, p.s]]);
         rowsG.push([[p.x - nx * (mh - 0.15), y + 0.22, p.z - nz * (mh - 0.15), 0, p.s / 3], [p.x + nx * (mh - 0.15), y + 0.22, p.z + nz * (mh - 0.15), 1, p.s / 3]]);
@@ -328,7 +329,7 @@ export function buildRoads(net, heights, preset) {
       if (rowsM.length > 1) { median.rows(rowsM); medianGrass.rows(rowsG); }
       for (let i = 0; i < S.length - 1; i += 1) {
         const a = S[i], b = S[i + 1];
-        if (onOtherRoad(net, a.x, a.z, r, 0.5) || onOtherRoad(net, b.x, b.z, r, 0.5)) continue;
+        if (opening(a) || opening(b)) continue;
         for (const s of [-1, 1]) segs.push({ ax: a.x - a.tz * mh * s, az: a.z + a.tx * mh * s, bx: b.x - b.tz * mh * s, bz: b.z + b.tx * mh * s, low: true });
       }
     }
@@ -449,12 +450,13 @@ export function buildRoads(net, heights, preset) {
   // Curbs bump the car: low walls along sidewalk edges.
   for (const r of net.roads) {
     if (!r.curb) continue;
-    for (let i = 0; i < r.samples.length - 1; i += 2) {
-      const a = r.samples[i], b = r.samples[Math.min(r.samples.length - 1, i + 2)];
+    for (let i = 0; i < r.samples.length - 1; i++) {
+      const a = r.samples[i], b = r.samples[i + 1];
       for (const s of [1, -1]) {
         const o = r.hw + 0.05;
         const ax = a.x - a.tz * o * s, az = a.z + a.tx * o * s, bx = b.x - b.tz * o * s, bz = b.z + b.tx * o * s;
-        if (onOtherRoad(net, (ax + bx) / 2, (az + bz) / 2, r, 0.8) || inGap(net, r, s, a.s) || inGap(net, r, s, b.s)) continue;
+        // Skip anything touching a junction or a driveway, so no invisible wall pokes into the crossing.
+        if (onOtherRoad(net, ax, az, r, 1.6) || onOtherRoad(net, bx, bz, r, 1.6) || inGap(net, r, s, a.s) || inGap(net, r, s, b.s)) continue;
         segs.push({ ax, az, bx, bz, curb: true });
       }
     }

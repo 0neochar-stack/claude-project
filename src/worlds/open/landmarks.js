@@ -123,7 +123,7 @@ export function buildLandmarks(net, heights) {
       for (let k = 0; k < bulbs; k++) {
         const hue = (k / bulbs + t * 0.05) % 1;
         const chase = 0.55 + 0.45 * Math.sin(k * 0.6 - t * 6);
-        c.setHSL(hue, 0.9, 0.55).multiplyScalar((0.25 + night * 2.6) * chase);
+        c.setHSL(hue, 0.9, 0.55).multiplyScalar((0.2 + night * 1.3) * chase);
         bc.set([c.r, c.g, c.b], k * 6);
         bc.set([c.r, c.g, c.b], k * 6 + 3);
       }

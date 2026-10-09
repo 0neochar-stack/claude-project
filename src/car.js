@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LAYER_MAIN_ONLY } from './wet.js';
 import { NEONS, RIMS } from './garage.js';
+import { addInterior } from './carInterior.js';
 
 export const PAINTS = [
   { name: 'Midnight Violet', color: 0x3b1a78 },
@@ -567,9 +568,20 @@ export function buildCar(envMap, radial, look = {}) {
     body.add(rod([side * (cx0 + 0.005), cy0, P.c[0]], [side * (cx1 + 0.01), cy1, P.c[1]], 0.04, paint));
     // Mirrors.
     const mx = halfWidth(0.45) - 0.05;
-    body.add(rod([side * mx, shoulder(0.45) + 0.03, 0.45], [side * (mx + 0.12), shoulder(0.45) + 0.1, 0.42], 0.015, carbon));
-    const mirror = box(0.16, 0.085, 0.1, paint, side * (mx + 0.16), shoulder(0.45) + 0.12, 0.42);
-    body.add(mirror);
+    // Aero mirror: a teardrop housing in body colour with reflective glass facing back.
+    const my = shoulder(0.45) + 0.12;
+    const housing = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 10), paint);
+    housing.scale.set(0.95, 0.55, 0.62);
+    housing.position.set(side * (mx + 0.16), my, 0.43);
+    body.add(housing);
+    const glassM = new THREE.Mesh(new THREE.CircleGeometry(0.083, 18), new THREE.MeshStandardMaterial({ color: 0xd8e2ee, metalness: 1, roughness: 0.03, envMap, envMapIntensity: 1.5 }));
+    glassM.scale.set(1, 0.6, 1);
+    glassM.position.set(side * (mx + 0.16), my, 0.43 - 0.064);
+    glassM.rotation.y = Math.PI + side * 0.18;
+    body.add(glassM);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.05), carbon);
+    arm.position.set(side * (mx + 0.07), my - 0.04, 0.44);
+    body.add(arm);
   }
 
   // Wheel wells so nothing shows through the arches, and a floor pan.
@@ -619,7 +631,7 @@ export function buildCar(envMap, radial, look = {}) {
   // Front: intake, slim LED headlights with projector dots.
   body.add(box(1.0, 0.16, 0.08, matte, 0, 0.36, 2.2));
   for (const side of [1, -1]) body.add(box(0.26, 0.1, 0.06, matte, side * 0.66, 0.34, 2.17));
-  const headMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 4.3, 4.8) });
+  const headMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2, 2.15, 2.4) });
   const headHousing = new THREE.BoxGeometry(0.44, 0.09, 0.26);
   for (const side of [1, -1]) {
     const hz = 1.98;
@@ -890,20 +902,21 @@ export function buildCar(envMap, radial, look = {}) {
   {
     // Steering wheel on the driver's side, kept out of the merge so it turns with the front wheels.
     steeringWheel = new THREE.Group();
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.02, 6, 24), cabin);
-    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.025, 0.02), cabin);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.02, 8, 28), cabin);
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.025, 0.02), cabin);
     const mark = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.03, 0.025), accent);
-    mark.position.y = 0.165;
+    mark.position.y = 0.152;
     steeringWheel.add(rim, spoke, mark);
-    steeringWheel.position.set(driverX, fz.base + 0.02, 0.05);
+    steeringWheel.position.set(driverX, fz.base + 0.11, 0.02);
     steeringWheel.rotation.x = -0.35;
     steeringWheel.rotation.order = 'XYZ';
     body.add(steeringWheel);
-    body.add(rod([driverX, fz.base + 0.02, 0.05], [driverX, fz.base - 0.05, 0.25], 0.02, cabin, 6));
-    body.add(rod([0, 0.45, -0.15], [0, 0.66, -0.12], 0.01, chrome, 6));
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), accent);
-    knob.position.set(0, 0.67, -0.12);
-    body.add(knob);
+    body.add(rod([driverX, fz.base + 0.11, 0.02], [driverX, fz.base + 0.04, 0.24], 0.02, cabin, 6));
+    // Spokes and a centre boss so the wheel reads as a real three-spoke wheel.
+    const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.04, 12).rotateX(Math.PI / 2), cabin);
+    steeringWheel.add(boss);
+    const lowSpoke = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.155, 0.02).translate(0, -0.078, 0), cabin);
+    steeringWheel.add(lowSpoke);
   }
   if (look.cage !== 'none') {
     const cage = look.cage === 'paint' ? paint : accent;
@@ -965,7 +978,9 @@ export function buildCar(envMap, radial, look = {}) {
   steeringWheel?.traverse((o) => o.isMesh && keep.add(o));
   mergeByMaterial(body, keep);
   // Cockpit eye point for the first-person camera, in body space.
-  const eye = new THREE.Vector3(driverX, glassSection(-0.5).base + 0.27, -0.66);
+  const eye = new THREE.Vector3(driverX, glassSection(-0.5).base + 0.31, -0.66);
+  // Cockpit: cluster, shift lights, lever and the driver (kept out of the merge, they move).
+  const interior = addInterior(body, { driverX, dashY: fz.base + 0.085, wheel: steeringWheel, wheelR: 0.155, eye, knob: new THREE.Vector3(0, fz.base + 0.1, -0.16), envMap, accent: look.cage === 'paint' ? PAINTS[look.paint || 0].color : 0xd8203f });
 
   let paintIndex = 0;
   let flameTime = 0;
@@ -1001,6 +1016,8 @@ export function buildCar(envMap, radial, look = {}) {
         }
       });
     },
+    // In first person the driver's own head and body are hidden; the arms and hands stay.
+    setFirstPerson(on) { interior.setFirstPerson(on); },
     // Headlight beam on at night, off in daylight.
     setLights(on) { beam.visible = on; tailGlow.visible = on; },
     setPaint(i) {
@@ -1011,10 +1028,10 @@ export function buildCar(envMap, radial, look = {}) {
     setNeon(i) {
       neonIndex = (i + NEONS.length) % NEONS.length;
       neonBase.set(NEONS[neonIndex].color);
-      neon.color.copy(neonBase).multiplyScalar(3);
-      glowMat.color.copy(neonBase).multiplyScalar(3);
-      poolMat.color.copy(neonBase).multiplyScalar(0.3);
-      decalMat.color.copy(neonBase).multiplyScalar(1.4);
+      neon.color.copy(neonBase).multiplyScalar(1.6);
+      glowMat.color.copy(neonBase).multiplyScalar(1.6);
+      poolMat.color.copy(neonBase).multiplyScalar(0.16);
+      decalMat.color.copy(neonBase).multiplyScalar(0.8);
       return NEONS[neonIndex].name;
     },
     setRims(i) {
@@ -1041,6 +1058,7 @@ export function buildCar(envMap, radial, look = {}) {
       body.position.y = stance.y;
       if (ground) { root.rotation.x = ground.pitch || 0; root.rotation.z = ground.roll || 0; root.rotation.order = 'YXZ'; }
       if (steeringWheel) steeringWheel.rotation.z = -car.steer * 2.6;
+      interior.update(car, dt);
       // Body roll from lateral load, pitch from acceleration.
       // Roll and pitch from the same load transfer the tyres feel, on a slightly bouncy spring.
       roll.v += (THREE.MathUtils.clamp(car.ay * 0.0075, -0.075, 0.075) - roll.x) * 90 * dt - roll.v * 11 * dt;
@@ -1056,7 +1074,7 @@ export function buildCar(envMap, radial, look = {}) {
         } else w.spin.rotation.x = w.dir * car.wheelSpinAngle;
       }
       const braking = car.braking > 0.1 || car.handbrake;
-      tailMat.color.setRGB(braking ? 6 : 2.2, braking ? 0.2 : 0.08, braking ? 0.25 : 0.12);
+      tailMat.color.setRGB(braking ? 3.2 : 1.2, braking ? 0.12 : 0.05, braking ? 0.14 : 0.07);
       tailGlow.intensity = braking ? 14 : 5;
 
       // Anti-lag pops: lifting off high in the rev range, or a shift under power.

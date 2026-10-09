@@ -38,7 +38,7 @@ export function createShowroom() {
   );
   root.add(floor);
   // Glowing turntable edge.
-  const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x33f0ff).multiplyScalar(2.4) });
+  const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x33f0ff).multiplyScalar(1.3) });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(4.55, 0.025, 6, 96).rotateX(Math.PI / 2), ringMat);
   ring.position.y = 0.02;
   root.add(ring);
@@ -51,15 +51,15 @@ export function createShowroom() {
   root.add(wall);
   // Neon light bars standing in a ring, alternating pink and cyan, and a halo overhead.
   const barGeo = new THREE.BoxGeometry(0.12, 6, 0.12);
-  const pink = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3fb4).multiplyScalar(2.6) });
-  const cyan = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x33f0ff).multiplyScalar(2.4) });
+  const pink = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3fb4).multiplyScalar(1.3) });
+  const cyan = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x33f0ff).multiplyScalar(1.3) });
   for (let k = 0; k < 14; k++) {
     const a = (k / 14) * Math.PI * 2;
     const bar = new THREE.Mesh(barGeo, k % 2 ? pink : cyan);
     bar.position.set(Math.cos(a) * 16, 3, Math.sin(a) * 16);
     root.add(bar);
   }
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(7, 0.05, 6, 96).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.95, 0.9).multiplyScalar(2) }));
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(7, 0.05, 6, 96).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.95, 0.9).multiplyScalar(1.1) }));
   halo.position.y = 7.5;
   root.add(halo);
 
@@ -88,15 +88,18 @@ export function createShowroom() {
     groundAt: () => 0,
     blocked: () => false,
     // Camera for the menus: a slow orbit, closer and lower in Customize.
-    camera(t, mode, cam) {
+    // Orbit camera for the menus: `orbit` holds yaw, pitch and zoom (from dragging, the wheel or the right
+    // stick); it drifts round on its own when left alone. Closer and lower in Customize.
+    camera(t, mode, cam, orbit = { yaw: t * 0.1 + 0.8, pitch: 0, zoom: 1 }) {
       const near = mode === 'customize';
-      const a = t * (near ? 0.14 : 0.1) + 0.8;
-      const r = near ? (cam.aspect < 1 ? 10.5 : 6.6) : 8.2;
-      cam.position.set(Math.sin(a) * r, near ? 1.45 : 1.9, Math.cos(a) * r);
-      cam.lookAt(0, near ? 0.6 : 0.75, 0);
+      const r = (near ? (cam.aspect < 1 ? 10.5 : 6.6) : 8.2) * orbit.zoom;
+      const el = Math.max(0.02, Math.min(1.2, (near ? 0.12 : 0.18) + orbit.pitch));
+      const ty = near ? 0.6 : 0.75;
+      cam.position.set(Math.sin(orbit.yaw) * Math.cos(el) * r, ty + Math.sin(el) * r, Math.cos(orbit.yaw) * Math.cos(el) * r);
+      cam.lookAt(0, ty, 0);
     },
     update(t) {
-      ringMat.color.setRGB(0.2, 0.94, 1).multiplyScalar(2 + Math.sin(t * 2) * 0.4);
+      ringMat.color.setRGB(0.2, 0.94, 1).multiplyScalar(1.1 + Math.sin(t * 2) * 0.2);
     },
     dispose() { disposeTree(root); },
   };

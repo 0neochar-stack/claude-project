@@ -33,6 +33,8 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       const cs = crossSection(q.road, q.lat);
       if (cs !== null) return q.y + 0.02 + cs;
     }
+    // Paved lots sit just above the flattened ground.
+    for (const lot of net.lots) if (inLot(lot, x, z)) return lot.y + 0.03;
     return heightAt(heights, x, z);
   }
   const groundAt = groundHeight;
@@ -150,7 +152,8 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   const CC = 32;
   const cells = new Map();
   const key = (cx, cz) => cx * 4096 + cz;
-  const colliders = [...roads.segs.map((s) => ({ type: 'seg', ...s })), ...town.colliders, ...nature.colliders, ...lamps.colliders, ...marks.colliders];
+  // Curbs and the median are mountable (you hop up onto them); only real obstacles stop the car.
+  const colliders = [...roads.segs.filter((s) => !s.curb && !s.low).map((s) => ({ type: 'seg', ...s })), ...town.colliders, ...nature.colliders, ...lamps.colliders, ...marks.colliders];
   colliders.forEach((c, idx) => {
     let x0, x1, z0, z1;
     if (c.type === 'seg') { x0 = Math.min(c.ax, c.bx) - 2; x1 = Math.max(c.ax, c.bx) + 2; z0 = Math.min(c.az, c.bz) - 2; z1 = Math.max(c.az, c.bz) + 2; }
@@ -388,7 +391,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       disposeTree(root);
       for (const e of Object.values(envs)) e.dispose();
     },
-    debug: { net, heights, roads, town, nature, water, traffic, police, sky },
+    debug: { colliders, net, heights, roads, town, nature, water, traffic, police, sky },
   };
   void CELL;
   await progress(1, 'Ready');

@@ -658,13 +658,13 @@ export function buildTown(net, heights, preset) {
     paved,
     spawn,
     setNight(n) {
-      mats.winLit.emissiveIntensity = n * 0.75;
-      mats.tower.emissiveIntensity = n * 0.8;
-      mats.sign.emissiveIntensity = 0.35 + n * 2.2;
-      mats.glowAtlas.emissiveIntensity = 0.6 + n * 1.4;
-      if (mats.letters) mats.letters.emissiveIntensity = n * 0.6;
-      if (mats.icing) mats.icing.emissiveIntensity = n * 0.6;
-      mats.glow.color.setScalar(0.4 + n * 2.6);
+      mats.winLit.emissiveIntensity = n * 0.45;
+      mats.tower.emissiveIntensity = n * 0.45;
+      mats.sign.emissiveIntensity = 0.2 + n * 1.1;
+      mats.glowAtlas.emissiveIntensity = 0.35 + n * 0.7;
+      if (mats.letters) mats.letters.emissiveIntensity = n * 0.3;
+      if (mats.icing) mats.icing.emissiveIntensity = n * 0.3;
+      mats.glow.color.setScalar(0.3 + n * 1.3);
     },
     update(t, cam) {
       for (const a of areas) {

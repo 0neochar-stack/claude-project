@@ -109,6 +109,14 @@ export class Hud {
     }
     this.set('gear', car.gear === -1 ? 'R' : car.autoGear ? `${car.gear}` : `M${car.gear}`);
     this.drawTach(car.spec.redline);
+    // Shift lights: fill green, yellow, red over the top quarter of the revs; all flash blue on the limiter.
+    const lights = this.lights ||= [...document.querySelectorAll('#shiftlights i')];
+    const sl = document.getElementById('shiftlights');
+    const lim = car.rpm > car.spec.redline - 120;
+    const lit = lim ? 0 : Math.max(0, Math.min(10, Math.floor(((car.rpm - car.spec.redline * 0.72) / (car.spec.redline * 0.27)) * 10)));
+    if (this.last.lit !== lit) { lights.forEach((el, k) => { el.className = k < lit ? (k < 5 ? 'g' : k < 8 ? 'y' : 'r') : ''; }); this.last.lit = lit; }
+    const flashOn = lim && Math.floor(performance.now() / 70) % 2 === 0;
+    if (this.last.flash !== flashOn) { sl.classList.toggle('is-limit', flashOn); this.last.flash = flashOn; }
     const frac = Math.min(1, car.rpm / this.tachMax);
     this.rpmArc.setAttribute('stroke-dasharray', `${frac.toFixed(3)} 1`);
     this.rpmArc.classList.toggle('is-hot', car.rpm > car.spec.redline - 300);

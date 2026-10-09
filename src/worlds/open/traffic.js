@@ -84,7 +84,7 @@ export class Traffic {
       const d = Math.hypot(c.x - player.x, c.z - player.z);
       if (d > 460 || (c.wreck <= 0 && (c.s < 2 || c.s > c.road.length - 2))) { c.root.removeFromParent(); this.cars.splice(i, 1); }
     }
-    this.lightMat.color.setScalar(0.4 + night * 2.4);
+    this.lightMat.color.setScalar(0.35 + night * 1.2);
     const p = {};
     const fwd = { x: 0, z: 0 };
     for (const c of this.cars) {

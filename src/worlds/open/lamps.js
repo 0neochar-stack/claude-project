@@ -95,8 +95,8 @@ export function buildLamps(roadLamps, townLamps, preset, groundAt) {
     colliders,
     setNight(n) {
       const on = Math.min(1, Math.max(0, (n - 0.2) / 0.4));
-      for (const m of headMats) m.color.copy(m.userData.base).multiplyScalar(0.25 + on * 3.2);
-      poolMat.opacity = on * 0.7;
+      for (const m of headMats) m.color.copy(m.userData.base).multiplyScalar(0.2 + on * 1.6);
+      poolMat.opacity = on * 0.4;
       poolMesh.visible = on > 0.01;
     },
     update() {},

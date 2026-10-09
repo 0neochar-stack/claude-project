@@ -136,8 +136,8 @@ export const ROAD_DEFS = [
 // first hairpin. Each is flattened to the height of the road it opens onto, counts as tarmac, and `gaps`
 // open the curb along that road (side +1 is left of the road's direction, s in metres along it).
 export const LOTS = [
-  { id: 'meet', name: 'Del Mar Plaza car meet', shape: 'rect', x0: -1172, x1: -1030, z0: -924, z1: -838, road: 'blvd', blend: 12, gaps: [{ road: 'blvd', side: 1, s0: 748, s1: 846 }] },
-  { id: 'gas', name: 'Gas station', shape: 'rect', x0: -1006, x1: -938, z0: -1004, z1: -955, road: 'blvd', blend: 10, gaps: [{ road: 'blvd', side: -1, s0: 898, s1: 958 }] },
+  { id: 'meet', name: 'Del Mar Plaza car meet', shape: 'rect', x0: -1172, x1: -1030, z0: -924, z1: -838, road: 'blvd', blend: 12, gaps: [{ road: 'blvd', side: 1, s0: 726, s1: 872 }] },
+  { id: 'gas', name: 'Gas station', shape: 'rect', x0: -1006, x1: -938, z0: -1004, z1: -955, road: 'blvd', blend: 10, gaps: [{ road: 'blvd', side: -1, s0: 892, s1: 964 }] },
   { id: 'summit', name: 'Kurogane summit lookout', shape: 'circle', x: 1296, z: 1606, r: 46, road: 'touge', at: 'end', blend: 30, gaps: [] },
   { id: 'lookout', name: 'Hairpin lookout', shape: 'rect', x0: 950, x1: 992, z0: 955, z1: 1000, road: 'touge', blend: 10, gaps: [] },
 ];

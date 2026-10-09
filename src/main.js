@@ -5,6 +5,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { CarBody } from './physics.js';
 import { LAYER_MAIN_ONLY, LAYER_WET } from './wet.js';
 import { buildCar, makeCarEnvironment } from './car.js';
@@ -36,7 +39,17 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPrefer
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.info.autoReset = false; // counted per frame across all passes
-let pixelRatio = Math.min(devicePixelRatio || 1, preset.pixelRatio);
+// Resolution: the preset's pixel ratio, or supersampled for a 4K-sharp image on strong GPUs. "Auto" drops it
+// a little when the frame rate sags and climbs back when it recovers; it never goes soft enough to look pixelated.
+const targetRatio = () => (settings.resolution === 'supersample' ? Math.min(3, (devicePixelRatio || 1) * 1.5) : Math.min(devicePixelRatio || 1, preset.pixelRatio));
+let pixelRatio = targetRatio();
+const MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
+// Every texture gets full anisotropic filtering, so road lines and ground stay crisp far away.
+function sharpen(root) {
+  root.traverse((o) => {
+    for (const m of [].concat(o.material || [])) for (const v of Object.values(m)) if (v && v.isTexture && v.anisotropy !== MAX_ANISO) { v.anisotropy = MAX_ANISO; v.needsUpdate = true; }
+  });
+}
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
@@ -48,6 +61,13 @@ composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.5, 0.85);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+// Edge smoothing after tone mapping: SMAA on high presets, FXAA on the lighter ones.
+const smaa = new SMAAPass(innerWidth, innerHeight);
+const fxaa = new ShaderPass(FXAAShader);
+composer.addPass(smaa);
+composer.addPass(fxaa);
+function applyAA() { smaa.enabled = preset.aa === 'smaa'; fxaa.enabled = preset.aa !== 'smaa'; }
+applyAA();
 
 // ---------- car, sound, effects ----------
 const sound = new Sound();
@@ -71,6 +91,7 @@ car.assist = ASSISTS[settings.assist][1];
 
 const showroom = createShowroom();
 scene.add(showroom.root);
+sharpen(showroom.root);
 let world = null; // the drivable world, once one is loaded
 let worldId = null;
 let state = 'boot'; // boot | menu | customize | loading | drive | pause
@@ -90,6 +111,7 @@ function showCar(id) {
   });
   carView.onBackfire = () => sound.pop();
   scene.add(carView.root);
+  sharpen(carView.root);
   const active = activeWorld();
   if (active.env.carEnv) carView.setEnvMap(active.env.carEnv);
   carView.setLights(active.env.headlights !== false);
@@ -109,7 +131,8 @@ function applyEnv(w) {
   scene.environment = env.sceneEnv || null;
   renderer.toneMappingExposure = env.exposure;
   bloom.enabled = preset.bloom && !!env.bloom;
-  if (env.bloom) { bloom.strength = env.bloom.strength; bloom.radius = env.bloom.radius; bloom.threshold = env.bloom.threshold; }
+  // Glow is kept subtle: half of what each world asks for.
+  if (env.bloom) { bloom.strength = env.bloom.strength * 0.5; bloom.radius = env.bloom.radius; bloom.threshold = env.bloom.threshold; }
   const far = Math.min(env.far, preset.far);
   if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
   renderer.shadowMap.enabled = !!(preset.shadows && env.shadows);
@@ -135,6 +158,7 @@ function resize() {
   renderer.setSize(w, h, false);
   composer.setPixelRatio(pixelRatio);
   composer.setSize(w, h);
+  fxaa.material.uniforms.resolution.value.set(1 / (w * pixelRatio), 1 / (h * pixelRatio));
   world?.resize?.(w * pixelRatio, h * pixelRatio);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -172,6 +196,7 @@ async function loadWorld(id) {
     worldId = id;
     world.root.visible = false;
     scene.add(world.root);
+    sharpen(world.root);
     setLoader(null, null, 1);
     resize();
     // Compile shaders now rather than stuttering on the first frames of driving.
@@ -244,6 +269,31 @@ function toShowroom() {
   ground = null;
   rig.snap(car);
 }
+
+// ---------- garage orbit camera ----------
+const orbit = { yaw: 0.8, pitch: 0, zoom: 1, idle: 10, drag: null };
+// Drag anywhere that is not a control (the canvas, or empty space around the menu panels).
+addEventListener('pointerdown', (e) => {
+  if (state !== 'menu' && state !== 'customize') return;
+  if (e.target !== canvas && e.target.closest('button, input, .cust__panel, .carcard, .modes, .main__foot, .brand, .card')) return;
+  orbit.drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  orbit.idle = 0;
+});
+addEventListener('pointermove', (e) => {
+  if (!orbit.drag || e.pointerId !== orbit.drag.id) return;
+  orbit.yaw -= (e.clientX - orbit.drag.x) * 0.008;
+  orbit.pitch = Math.max(-0.1, Math.min(0.95, orbit.pitch + (e.clientY - orbit.drag.y) * 0.005));
+  orbit.drag.x = e.clientX; orbit.drag.y = e.clientY;
+  orbit.idle = 0;
+});
+addEventListener('pointerup', () => { orbit.drag = null; });
+addEventListener('pointercancel', () => { orbit.drag = null; });
+addEventListener('wheel', (e) => {
+  if (state !== 'menu' && state !== 'customize') return;
+  if (e.target !== canvas && e.target.closest('.cust__panel, .modes, .card')) return;
+  orbit.zoom = Math.max(0.55, Math.min(1.6, orbit.zoom * (1 + Math.sign(e.deltaY) * 0.08)));
+  orbit.idle = 0;
+}, { passive: true });
 
 // ---------- menus ----------
 const screens = new Screens();
@@ -369,6 +419,7 @@ function cycleTime(dir = 1) {
 // Settings rows: each is a cycler (left/right or click) or a slider.
 const SETTINGS = [
   { key: 'quality', label: 'Graphics', note: 'Auto picks for your device', opts: [['auto', 'Auto'], ...QUALITY_ORDER.map((q) => [q, q[0].toUpperCase() + q.slice(1)])] },
+  { key: 'resolution', label: 'Resolution', note: 'Supersample is the sharpest (needs a strong GPU)', opts: [['auto', 'Auto'], ['native', 'Native'], ['supersample', 'Supersample 4K']] },
   { key: 'camera', label: 'Camera', opts: CAMERAS.map((c) => [c.id, c.name]) },
   { key: 'assist', label: 'Drift assist', note: 'Counter-steer and angle help', opts: ASSISTS.map(([n], i) => [i, n]) },
   { key: 'gearbox', label: 'Gearbox', opts: [['auto', 'Automatic'], ['manual', 'Manual']] },
@@ -395,7 +446,7 @@ function changeSetting(key, dir) {
   if (key === 'camera') rig.set(v);
   if (key === 'assist') car.assist = ASSISTS[v][1];
   if (key === 'timeOfDay') world?.setTimeOfDay?.(v);
-  if (key === 'quality') applyQuality();
+  if (key === 'quality' || key === 'resolution') applyQuality();
   const btn = $('settings-rows').querySelector(`[data-setting="${key}"]`);
   btn.querySelector('b').textContent = s.opts.find((o) => o[0] === settingValue(key))[1];
 }
@@ -415,7 +466,8 @@ $('settings-rows').addEventListener('input', (e) => {
 // A new graphics preset takes effect on the next world load; resolution and bloom change now.
 function applyQuality() {
   preset = settings.preset;
-  pixelRatio = Math.min(devicePixelRatio || 1, preset.pixelRatio);
+  pixelRatio = targetRatio();
+  applyAA();
   resize();
   applyEnv(activeWorld());
   hud.toast(`Graphics: ${preset.label}${world ? ' · full effect on next load' : ''}`);
@@ -466,7 +518,8 @@ function groundPose(x, z, h) {
   const fx = x + s * 1.3, fz = z + c * 1.3, bx = x - s * 1.3, bz = z - c * 1.3;
   const lx = x + c * 0.8, lz = z - s * 0.8, rx = x - c * 0.8, rz = z + s * 0.8;
   const yF = gh(fx, fz), yB = gh(bx, bz), yL = gh(lx, lz), yR = gh(rx, rz);
-  const y = (yF + yB + yL + yR) / 4;
+  // Never below the ground right under the middle of the car (crests and cambered bends).
+  const y = Math.max((yF + yB + yL + yR) / 4, gh(x, z) - 0.02);
   const pitch = -Math.atan2(yF - yB, 2.6);
   const roll = Math.atan2(yL - yR, 1.6);
   return { y, pitch, roll, dX: (gh(x + 1, z) - gh(x - 1, z)) / 2, dZ: (gh(x, z + 1) - gh(x, z - 1)) / 2 };
@@ -570,7 +623,10 @@ function frame(now) {
     sound.update(car, dt);
   }
 
-  if (carView) carView.update(car, dt, driving || state === 'pause' ? ground : null);
+  if (carView) {
+    carView.setFirstPerson((driving || state === 'pause') && rig.id === 'cockpit');
+    carView.update(car, dt, driving || state === 'pause' ? ground : null);
+  }
   const inWorld = (driving || state === 'pause') && world;
   if (inWorld) {
     world.update(clock, dt, { camera, car, playing: driving, carView, hud, score, profile, sound, scene, renderer, applyEnv: () => applyEnv(world) });
@@ -582,7 +638,12 @@ function frame(now) {
     showroom.update(clock);
     particles.update(dt);
     if (camera.view?.enabled) camera.clearViewOffset();
-    showroom.camera(clock, state === 'customize' ? 'customize' : 'menu', camera);
+    // Orbit: drifts slowly by itself, or follows a drag, the mouse wheel and the right stick.
+    const look = input.look();
+    if (look.x || look.y) { orbit.yaw -= look.x * dt * 2.2; orbit.pitch = Math.max(-0.1, Math.min(0.95, orbit.pitch - look.y * dt * 1.2)); orbit.idle = 0; }
+    orbit.idle += dt;
+    if (orbit.idle > 4 && !orbit.drag) orbit.yaw += dt * (state === 'customize' ? 0.14 : 0.1) * Math.min(1, (orbit.idle - 4) / 2);
+    showroom.camera(clock, state === 'customize' ? 'customize' : 'menu', camera, orbit);
     // Frame the car in the space the panel leaves.
     if (state === 'customize') {
       const w = innerWidth, h = innerHeight;
@@ -598,8 +659,7 @@ function frame(now) {
 
   renderer.info.reset();
   if (inWorld) world.render?.(renderer, scene, camera, frameNo);
-  if (bloom.enabled) composer.render();
-  else renderer.render(scene, camera);
+  composer.render();
 
   // Resolution follows the frame rate: drop when the device cannot keep up, recover when it can.
   perfTime += dt;
@@ -607,9 +667,11 @@ function frame(now) {
   if (perfTime > 2) {
     const fps = perfFrames / perfTime;
     fpsShown = fps;
-    const top = Math.min(devicePixelRatio || 1, preset.pixelRatio);
-    if (fps < 40 && pixelRatio > 0.6) { pixelRatio = Math.max(0.6, pixelRatio - 0.15); resize(); }
-    else if (fps > 57 && pixelRatio < top) { pixelRatio = Math.min(top, pixelRatio + 0.1); resize(); }
+    const top = targetRatio(), floor = Math.max(0.85, top * 0.65);
+    if (settings.resolution === 'auto') {
+      if (fps < 40 && pixelRatio > floor) { pixelRatio = Math.max(floor, pixelRatio - 0.1); resize(); }
+      else if (fps > 57 && pixelRatio < top) { pixelRatio = Math.min(top, pixelRatio + 0.1); resize(); }
+    } else if (pixelRatio !== top) { pixelRatio = top; resize(); }
     perfTime = 0;
     perfFrames = 0;
   }
@@ -621,7 +683,7 @@ input.onPadStatus = (status, id = '') => {
   const line = $('pad-status');
   if (status === 'connected') { line.textContent = `${name} connected`; hud.toast(`${name} connected`); }
   else if (status === 'disconnected') { line.textContent = 'Controller disconnected'; hud.toast('Controller disconnected'); }
-  else line.textContent = 'This view blocks controllers. Open the game in its own browser tab to use one.';
+  else { line.textContent = 'This view blocks controllers. Open the game in its own browser tab to use one.'; $('pad-note').hidden = false; }
 };
 addEventListener('pointerdown', () => sound.start(), { once: true });
 addEventListener('keydown', () => sound.start(), { once: true });

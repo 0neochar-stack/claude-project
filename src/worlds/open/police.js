@@ -139,10 +139,10 @@ export class Police {
       cop.root.position.set(c.x, y, c.z);
       cop.root.rotation.y = c.h;
       const flash = Math.floor(performance.now() / 130) % 2;
-      cop.r.material.color.setRGB(flash ? 6 : 0.4, 0.05, 0.1);
-      cop.b.material.color.setRGB(0.05, 0.25, flash ? 0.4 : 6);
+      cop.r.material.color.setRGB(flash ? 3 : 0.3, 0.05, 0.1);
+      cop.b.material.color.setRGB(0.05, 0.2, flash ? 0.3 : 3);
     }
-    this.lightMat.color.setScalar(0.5 + night * 2.2);
+    this.lightMat.color.setScalar(0.4 + night * 1.1);
     if (this.state === 'chase') {
       // Busted: stopped next to a cruiser. Evaded: well clear for long enough.
       if (nearest < 9 && player.speed < 2.5) this.bustTimer += dt; else this.bustTimer = Math.max(0, this.bustTimer - dt * 2);
