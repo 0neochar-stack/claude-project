@@ -943,13 +943,16 @@ export function buildCar(envMap, radial, look = {}) {
   pool.position.y = 0.035;
   pool.layers.set(LAYER_MAIN_ONLY);
   root.add(pool);
+  const ao = contactShadow(4.6 * sz, 2.0 * sx);
+  ao.layers.set(LAYER_MAIN_ONLY);
+  root.add(ao);
 
   // Headlight beam and a red wash behind.
   const beam = new THREE.SpotLight(0xdde8ff, 260, 70, 0.42, 0.55, 1.4);
   beam.position.set(0, 0.7, 2.0);
   beam.target.position.set(0, 0, 14);
   body.add(beam, beam.target);
-  const tailGlow = new THREE.PointLight(0xff2030, 6, 7, 2);
+  const tailGlow = new THREE.PointLight(0xff2030, 3, 7, 2);
   tailGlow.position.set(0, 0.6, -2.8);
   body.add(tailGlow);
 
@@ -1075,7 +1078,7 @@ export function buildCar(envMap, radial, look = {}) {
       }
       const braking = car.braking > 0.1 || car.handbrake;
       tailMat.color.setRGB(braking ? 3.2 : 1.2, braking ? 0.12 : 0.05, braking ? 0.14 : 0.07);
-      tailGlow.intensity = braking ? 14 : 5;
+      tailGlow.intensity = braking ? 7 : 2.5;
 
       // Anti-lag pops: lifting off high in the rev range, or a shift under power.
       const lift = lastThrottle > 0.6 && car.driveThrottle < 0.1 && car.rpm > 4800;
@@ -1093,6 +1096,29 @@ export function buildCar(envMap, radial, look = {}) {
   api.setNeon(look.neon || 0);
   api.setRims(look.rims || 0);
   return api;
+}
+
+// ---------- contact shadow ----------
+// A soft dark ellipse under a car, so it sits on the ground even without real shadows. Shared texture.
+let aoTex = null;
+export function contactShadowTexture() {
+  if (aoTex) return aoTex;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const g = cv.getContext('2d');
+  // Round falloff reaching zero well inside the edges; the plane it sits on stretches it to the car.
+  const grd = g.createRadialGradient(64, 64, 6, 64, 64, 60);
+  grd.addColorStop(0, 'rgba(0,0,0,0.8)'); grd.addColorStop(0.5, 'rgba(0,0,0,0.5)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  aoTex = new THREE.CanvasTexture(cv);
+  aoTex.userData.shared = true;
+  return aoTex;
+}
+export function contactShadow(length = 4.6, width = 2.2) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(width * 1.15, length * 1.12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, depthWrite: false, opacity: 0.75, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 }));
+  m.position.y = 0.04;
+  m.renderOrder = 1;
+  return m;
 }
 
 // ---------- low-detail cars ----------

@@ -153,7 +153,7 @@ export class Input {
         else if (dir !== st.navDir || now >= st.navNext) {
           out.push(dir);
           // First repeat after a pause, then quicker, like holding an arrow key.
-          st.navNext = now + (dir === st.navDir ? 130 : 380);
+          st.navNext = now + (dir === st.navDir ? 130 : 480);
           st.navDir = dir;
         }
       }

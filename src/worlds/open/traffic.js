@@ -2,7 +2,7 @@
 // you, slowing for cross traffic, and getting knocked aside if you hit them. They appear out of sight
 // ahead or behind and leave once far away.
 import * as THREE from 'three';
-import { carLowGeometry } from '../../car.js';
+import { carLowGeometry, contactShadow } from '../../car.js';
 import { CARS } from '../../garage.js';
 
 // Lane centres from the road's centre line, for each direction. America drives on the right; the
@@ -62,7 +62,7 @@ export class Traffic {
       body.castShadow = true;
       const lights = new THREE.Mesh(geo.lights, this.lightMat);
       const root = new THREE.Group();
-      root.add(body, lights);
+      root.add(body, lights, contactShadow(geo.length, geo.width));
       this.group.add(root);
       const v = road.speed * (0.8 + Math.random() * 0.3);
       this.cars.push({ road, s, dir, lane, v, vt: v, root, x: p.x, z: p.z, h: 0, wreck: 0, wx: 0, wz: 0, wr: 0, len: geo.length, wid: geo.width });

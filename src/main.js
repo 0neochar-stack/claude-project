@@ -10,7 +10,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { CarBody } from './physics.js';
 import { LAYER_MAIN_ONLY, LAYER_WET } from './wet.js';
-import { buildCar, makeCarEnvironment } from './car.js';
+import { buildCar, makeCarEnvironment, PAINTS } from './car.js';
 import { Particles, SkidMarks, radialTexture } from './fx.js';
 import { Sound } from './audio.js';
 import { Input } from './input.js';
@@ -121,6 +121,52 @@ function showCar(id) {
   carView.update(car, 0, ground);
 }
 
+// ---------- split screen: player two ----------
+// Player two drives a second car (another one you own, or an S15) with the second controller, in the
+// bottom half of the screen. Their points are not saved.
+let p2 = null;
+const camera2 = new THREE.PerspectiveCamera(62, 1, 0.1, 2000);
+camera2.layers.enable(LAYER_MAIN_ONLY);
+camera2.layers.enable(LAYER_WET);
+const splitOn = () => settings.players === 2;
+function makeP2() {
+  const owned = Object.keys(profile.cars).filter((id) => id !== profile.current);
+  const id = owned[0] || 's15';
+  const def = carById(id);
+  const st = profile.owns(id) ? profile.car(id) : def.look;
+  const view = buildCar(neonEnv, radialTexture(), {
+    ...def.look, paint: profile.owns(id) ? st.paint : (def.look.paint + 4) % PAINTS.length, neon: st.neon, rims: st.rims, wheels: st.wheels || def.look.wheels, wing: st.wing || def.look.wing,
+  });
+  if (profile.owns(id)) view.setStance(profile.car(id).tune);
+  scene.add(view.root);
+  sharpen(view.root);
+  const body = new CarBody(profile.owns(id) ? profile.spec(id) : buildSpec(id));
+  body.assist = car.assist;
+  body.autoGear = true;
+  const r = new CameraRig(camera2);
+  r.set('chase');
+  return { id, car: body, view, rig: r, score: new DriftScore(false), ground: null, acc: 0, smoke: [0, 0] };
+}
+function dropP2() {
+  if (!p2) return;
+  p2.view.dispose();
+  p2 = null;
+  document.body.classList.remove('is-split');
+  $('hud2').hidden = true;
+  input.split = false;
+  resize();
+}
+// Put player two alongside player one.
+function placeP2(at) {
+  if (!p2) return;
+  const rx = -Math.cos(at.heading), rz = Math.sin(at.heading); // the driver's right
+  p2.car.reset(at.x + rx * 4.2, at.z + rz * 4.2, at.heading);
+  p2.score.chain = 0;
+  p2.rig.snap(p2.car);
+  p2.view.setEnvMap(world?.env.carEnv || neonEnv);
+  p2.view.setLights(world?.env.headlights !== false);
+}
+
 const activeWorld = () => (state === 'drive' || state === 'pause' || state === 'loading' ? world || showroom : showroom);
 
 // ---------- world environment ----------
@@ -160,8 +206,11 @@ function resize() {
   composer.setSize(w, h);
   fxaa.material.uniforms.resolution.value.set(1 / (w * pixelRatio), 1 / (h * pixelRatio));
   world?.resize?.(w * pixelRatio, h * pixelRatio);
-  camera.aspect = w / h;
+  const split = !!p2 && (state === 'drive' || state === 'pause');
+  camera.aspect = w / (split ? h / 2 : h);
   camera.updateProjectionMatrix();
+  camera2.aspect = w / (h / 2);
+  camera2.updateProjectionMatrix();
   particles.material.uniforms.uScale.value = (h * pixelRatio) / 2;
 }
 addEventListener('resize', resize);
@@ -213,6 +262,15 @@ function startDriving(at) {
   state = 'drive';
   screens.set(null);
   car.reset(at.x, at.z, at.heading);
+  if (splitOn()) {
+    if (!p2) p2 = makeP2();
+    document.body.classList.add('is-split');
+    $('hud2').hidden = false;
+    input.split = true;
+    placeP2(at);
+    resize();
+    if (input.padCount < 2) hud.toast('Connect a second controller for player 2');
+  } else dropP2();
   car.spec = profile.spec();
   score.chain = 0;
   score.mult = 1;
@@ -224,6 +282,7 @@ function startDriving(at) {
 function enterDrive() {
   state = 'drive';
   screens.set(null);
+  if (p2) { p2.view.root.visible = true; $('hud2').hidden = false; document.body.classList.add('is-split'); resize(); }
   setWorldVisible();
   $('hud').hidden = false;
   $('touch').hidden = !isTouch;
@@ -253,6 +312,7 @@ function resume() {
 }
 
 function quitToMenu() {
+  dropP2();
   state = 'menu';
   $('hud').hidden = true;
   $('touch').hidden = true;
@@ -264,6 +324,7 @@ function quitToMenu() {
 
 // The garage and menus happen in the showroom: park the car on the turntable.
 function toShowroom() {
+  if (p2) { p2.view.root.visible = false; document.body.classList.remove('is-split'); $('hud2').hidden = true; resize(); }
   setWorldVisible();
   car.reset(0, 0, showroom.spawn.heading);
   ground = null;
@@ -336,6 +397,7 @@ function leaveCustomize() {
     car.spec = profile.spec();
     saved = null;
     $('hud').hidden = false;
+    if (p2) { p2.view.root.visible = true; $('hud2').hidden = false; document.body.classList.add('is-split'); resize(); }
     screens.set('pause');
     return;
   }
@@ -364,6 +426,7 @@ function renderMain() {
   ].map(([v, u]) => `<span class="chip">${v}${u ? ` <i>${u}</i>` : ''}</span>`).join('');
   $('main-credits').textContent = `${fmt.format(profile.credits)} CR`;
   $('btn-mute').textContent = sound.muted ? 'Sound off' : 'Sound on';
+  $('btn-players').textContent = splitOn() ? '2 Players · split' : '1 Player';
 }
 
 document.querySelector('.modes').addEventListener('click', (e) => {
@@ -388,6 +451,11 @@ document.addEventListener('click', (e) => {
   else if (act === 'respawn') { resume(); respawn(); }
   else if (act === 'quit') quitToMenu();
   else if (act === 'mute') toggleMute();
+  else if (act === 'players') {
+    settings.set('players', splitOn() ? 1 : 2);
+    renderMain();
+    hud.toast(splitOn() ? `Split screen on · ${input.padCount >= 2 ? 'two controllers ready' : 'player 2 needs a second controller'}` : 'Single player');
+  }
   else if (act === 'close-settings') screens.back();
 });
 $('btn-pause').addEventListener('click', () => pause());
@@ -423,6 +491,7 @@ const SETTINGS = [
   { key: 'camera', label: 'Camera', opts: CAMERAS.map((c) => [c.id, c.name]) },
   { key: 'assist', label: 'Drift assist', note: 'Counter-steer and angle help', opts: ASSISTS.map(([n], i) => [i, n]) },
   { key: 'gearbox', label: 'Gearbox', opts: [['auto', 'Automatic'], ['manual', 'Manual']] },
+  { key: 'players', label: 'Players', note: 'Two players split the screen; player 2 uses the second controller', opts: [[1, '1 Player'], [2, '2 Players']] },
   { key: 'units', label: 'Speed units', opts: [['kmh', 'km/h'], ['mph', 'mph']] },
   { key: 'timeOfDay', label: 'Time of day', note: 'Open World', opts: TIMES },
   { key: 'showFps', label: 'Show FPS', opts: [[false, 'Off'], [true, 'On']] },
@@ -447,6 +516,7 @@ function changeSetting(key, dir) {
   if (key === 'assist') car.assist = ASSISTS[v][1];
   if (key === 'timeOfDay') world?.setTimeOfDay?.(v);
   if (key === 'quality' || key === 'resolution') applyQuality();
+  if (key === 'players') renderMain();
   const btn = $('settings-rows').querySelector(`[data-setting="${key}"]`);
   btn.querySelector('b').textContent = s.opts.find((o) => o[0] === settingValue(key))[1];
 }
@@ -526,8 +596,8 @@ function groundPose(x, z, h) {
 }
 
 // ---------- effects ----------
-const smokeAcc = [0, 0];
-function emitEffects(dt) {
+const smokeAccP1 = [0, 0];
+function emitEffects(dt, car = window.__p1car, carView = window.__p1view, ground = window.__p1ground, smokeAcc = smokeAccP1, keyBase = 0) {
   const sh = Math.sin(car.h), ch = Math.cos(car.h);
   const track = carView.rearTrack, back = -carView.rearZ;
   const env = world.env;
@@ -537,7 +607,7 @@ function emitEffects(dt) {
     const wx = car.x + ch * side * track - sh * back;
     const wz = car.z - sh * side * track - ch * back;
     const offroad = car.grip < 0.9;
-    skids.mark(side, wx, wz, slip > 0.08 && !offroad ? 0.22 + slip * 0.45 : 0, clock, 0.25, gy + 0.03);
+    skids.mark(keyBase + side, wx, wz, slip > 0.08 && !offroad ? 0.22 + slip * 0.45 : 0, clock, 0.25, gy + 0.03);
     // Thick billowing smoke (dust off the road), carried along with the car a little.
     const k = side > 0 ? 1 : 0;
     smokeAcc[k] += slip * slip * dt * (preset.particles / 25);
@@ -597,7 +667,74 @@ function stepDrive(dt, controls) {
     } else hud.banner(`Crashed  −${fmt.format(Math.round(e.points))}`, 'crash');
   }
   sound.update(car, dt);
-  emitEffects(dt);
+  emitEffects(dt, car, carView, ground, smokeAccP1, 0);
+}
+
+// Two cars against each other: two circles each, an even shove both ways.
+function carVsCar(a, b) {
+  let impact = 0;
+  if (Math.abs(a.x - b.x) > 7 || Math.abs(a.z - b.z) > 7) return 0;
+  const s1 = Math.sin(a.h), c1 = Math.cos(a.h), s2 = Math.sin(b.h), c2 = Math.cos(b.h);
+  for (const o1 of [1.3, -1.3]) for (const o2 of [1.3, -1.3]) {
+    const p1x = s1 * o1, p1z = c1 * o1, p2x = s2 * o2, p2z = c2 * o2;
+    const dx = a.x + p1x - b.x - p2x, dz = a.z + p1z - b.z - p2z, d = Math.hypot(dx, dz);
+    if (d >= 2 || d < 1e-4) continue;
+    const nx = dx / d, nz = dz / d, pen = 2 - d;
+    a.x += (nx * pen) / 2; a.z += (nz * pen) / 2; b.x -= (nx * pen) / 2; b.z -= (nz * pen) / 2;
+    const vn = (a.vx + a.r * p1z - b.vx - b.r * p2z) * nx + (a.vz - a.r * p1x - b.vz + b.r * p2x) * nz;
+    if (vn >= 0) continue;
+    impact = Math.max(impact, -vn);
+    const ra = p1z * nx - p1x * nz, rb = p2z * nx - p2x * nz;
+    const j = (-1.25 * vn) / (1 / a.spec.mass + 1 / b.spec.mass + (ra * ra) / a.spec.inertia + (rb * rb) / b.spec.inertia);
+    a.applyImpulse(p1x, p1z, nx * j, nz * j);
+    b.applyImpulse(p2x, p2z, -nx * j, -nz * j);
+  }
+  return impact;
+}
+
+// Player two's physics, score and effects.
+function stepP2(dt, controls) {
+  const c = p2.car;
+  p2.acc += dt;
+  let impact = 0;
+  while (p2.acc >= STEP) {
+    if (!world.flat) {
+      p2.ground = groundPose(c.x, c.z, c.h);
+      const k = G / (1 + p2.ground.dX * p2.ground.dX + p2.ground.dZ * p2.ground.dZ);
+      c.gx = -p2.ground.dX * k;
+      c.gz = -p2.ground.dZ * k;
+    }
+    world.surface?.(c);
+    c.step(STEP, controls);
+    impact = Math.max(impact, world.collide(c), carVsCar(car, c));
+    p2.acc -= STEP;
+  }
+  if (impact > 3) { sound.crash(impact * 0.6); p2.rig.shake = Math.min(0.6, impact * 0.05); }
+  p2.score.update(dt, c, impact);
+  for (const e of p2.score.takeEvents()) if (e.type === 'bank') hud.banner(`P2 +${fmt.format(e.points)}`, 'bank');
+  emitEffects(dt, c, p2.view, p2.ground, p2.smoke, 10);
+}
+
+function handleActionP2(a) {
+  if (state !== 'drive' || !p2) return;
+  if (a === 'help') { pause(); return; }
+  if (a === 'shiftUp' || a === 'shiftDown') { p2.car.shift(a === 'shiftUp' ? 1 : -1); p2.car.autoGear = false; }
+  if (a === 'camera') p2.rig.cycle();
+  if (a === 'view') p2.rig.toggleView();
+  if (a === 'reset') { const p = world.nearestRoad(p2.car.x, p2.car.z, p2.car.h); p2.car.reset(p.x, p.z, p.heading); p2.rig.snap(p2.car); }
+}
+
+const p2el = {};
+function updateHud2() {
+  const e = (id) => (p2el[id] ||= $(id));
+  const sc = p2.score, c = p2.car;
+  e('p2-chain').classList.toggle('is-idle', sc.chain <= 0);
+  if (sc.chain > 0) { e('p2-grade').textContent = sc.grade; e('p2-points').textContent = fmt.format(Math.round(sc.chain)); e('p2-mult').textContent = `×${sc.mult.toFixed(1)}`; }
+  const mph = settings.units === 'mph';
+  e('p2-speed').textContent = String(Math.round(c.speed * (mph ? 2.237 : 3.6)));
+  e('p2-units').textContent = mph ? 'mph' : 'km/h';
+  e('p2-gear').textContent = c.gear === -1 ? 'R' : String(c.gear);
+  e('p2-total').textContent = fmt.format(Math.round(sc.total));
 }
 
 function frame(now) {
@@ -612,7 +749,12 @@ function frame(now) {
   for (const a of input.takeActions()) handleAction(a);
 
   const driving = state === 'drive';
-  if (driving) stepDrive(dt, controls);
+  const controls2 = p2 ? input.poll2() : null;
+  for (const a of input.takeActions2()) handleActionP2(a);
+  if (driving) {
+    stepDrive(dt, controls);
+    if (p2) stepP2(dt, controls2);
+  }
   else if (state === 'menu' || state === 'customize') {
     // In the showroom the car idles in neutral; "Rev it" blips the throttle.
     revTimer -= dt;
@@ -634,6 +776,13 @@ function frame(now) {
     skids.update(clock);
     rig.update(dt, car, carView, world, ground, driving);
     if (driving) hud.update(dt, { car, score, profile, settings, world });
+    if (p2) {
+      p2.view.setFirstPerson(p2.rig.id === 'cockpit');
+      p2.view.update(p2.car, dt, p2.ground);
+      p2.rig.update(dt, p2.car, p2.view, world, p2.ground, driving);
+      camera2.far = camera.far;
+      if (driving) updateHud2();
+    }
   } else {
     showroom.update(clock);
     particles.update(dt);
@@ -658,8 +807,22 @@ function frame(now) {
   if (inWorld && camera.view?.enabled) { camera.clearViewOffset(); camera.updateProjectionMatrix(); }
 
   renderer.info.reset();
-  if (inWorld) world.render?.(renderer, scene, camera, frameNo);
-  composer.render();
+  if (inWorld && p2) {
+    // Split screen: draw each player's view into their half (no post effects, to keep two views fast).
+    const w = innerWidth, h = innerHeight;
+    renderer.setScissorTest(true);
+    for (const [cam, y] of [[camera, h / 2], [camera2, 0]]) {
+      world.render?.(renderer, scene, cam, frameNo);
+      renderer.setViewport(0, y, w, h / 2);
+      renderer.setScissor(0, y, w, h / 2);
+      renderer.render(scene, cam);
+    }
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, w, h);
+  } else {
+    if (inWorld) world.render?.(renderer, scene, camera, frameNo);
+    composer.render();
+  }
 
   // Resolution follows the frame rate: drop when the device cannot keep up, recover when it can.
   perfTime += dt;
@@ -689,7 +852,7 @@ addEventListener('pointerdown', () => sound.start(), { once: true });
 addEventListener('keydown', () => sound.start(), { once: true });
 car.autoGear = settings.gearbox !== 'manual';
 
-window.__cd = { get carView() { return carView; }, camera, composer, bloom, car, score, input, profile, renderer, scene, settings, get world() { return world; }, loadWorld, showroom, rig, screens, customize };
+window.__cd = { get p2() { return p2; }, get carView() { return carView; }, camera, composer, bloom, car, score, input, profile, renderer, scene, settings, get world() { return world; }, loadWorld, showroom, rig, screens, customize };
 
 // Boot straight into the main menu in the showroom.
 state = 'menu';

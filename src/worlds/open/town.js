@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { HALF, heightAt, roadQuery, rng, clamp, PCH_Z, BOULEVARD_Z, LOTS, inLot } from './layout.js';
 import { Builder, makeTextures, atlasTexture, signTexture, CELLS, SIGNS } from './builder.js';
-import { carLowGeometry, PAINTS } from '../../car.js';
+import { carLowGeometry, PAINTS, contactShadowTexture } from '../../car.js';
 import { CARS } from '../../garage.js';
 
 const AREA = 400;
@@ -599,6 +599,7 @@ export function buildTown(net, heights, preset) {
 
   // ---------- parked cars, merged ----------
   const carMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.45, roughness: 0.32 });
+  const aoMat = new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, depthWrite: false, opacity: 0.7, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 });
   const carLights = new THREE.MeshBasicMaterial({ vertexColors: true });
   const byArea = new Map();
   for (const c of parked) {
@@ -617,6 +618,11 @@ export function buildTown(net, heights, preset) {
     const mesh = new THREE.Mesh(mergeGeometries(bodies), carMat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    // Contact shadows under the parked cars, merged too.
+    const blobs = list.map((c) => new THREE.PlaneGeometry(2.3, 5.1).rotateX(-Math.PI / 2).rotateY(c.rot).translate(c.x, c.y + 0.05, c.z));
+    const ao = new THREE.Mesh(mergeGeometries(blobs), aoMat);
+    ao.renderOrder = 1;
+    mesh.add(ao);
     const [ax, az] = k.split(',').map(Number);
     parkedMeshes.push({ mesh, x: -HALF + (ax + 0.5) * AREA, z: -HALF + (az + 0.5) * AREA });
   }

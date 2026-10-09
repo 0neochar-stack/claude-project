@@ -13,9 +13,11 @@ function save(key, v) {
 }
 
 export class DriftScore {
-  constructor() {
-    this.total = load('cd.total');
-    this.best = load('cd.best');
+  // persist: false for player two in split screen, whose points are not saved.
+  constructor(persist = true) {
+    this.persist = persist;
+    this.total = persist ? load('cd.total') : 0;
+    this.best = persist ? load('cd.best') : 0;
     this.chain = 0;
     this.mult = 1;
     this.idle = 0;
@@ -71,8 +73,10 @@ export class DriftScore {
     this.chain = 0;
     this.mult = 1;
     this.idle = 0;
-    save('cd.total', this.total);
-    save('cd.best', this.best);
+    if (this.persist) {
+      save('cd.total', this.total);
+      save('cd.best', this.best);
+    }
   }
 
   takeEvents() {

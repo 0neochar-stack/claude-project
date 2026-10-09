@@ -283,6 +283,22 @@ body.is-touch .shiftlights { top: calc(52px + var(--safe-t)); bottom: auto; righ
 .toast.is-shown { opacity: 1; transform: translate(-50%, 0); }
 .splash { position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 50%, rgba(200, 230, 255, 0) 40%, rgba(200, 230, 255, 0.35) 100%); transition: opacity 0.4s; }
 
+/* Split screen: player one on top, player two below. */
+body.is-split .hud:not(.hud2) { bottom: 50%; }
+body.is-split .hud:not(.hud2) .map { width: 132px; height: 132px; }
+body.is-split .hud:not(.hud2) .dash { width: 150px; height: 150px; }
+body.is-split .hud:not(.hud2) .dash__speed { font-size: 40px; }
+body.is-split .hud:not(.hud2) .shiftlights { bottom: calc(168px + var(--safe-b)); width: 130px; right: 28px; }
+body.is-split .hud:not(.hud2) .boost { bottom: calc(184px + var(--safe-b)); width: 150px; }
+body.is-split .hud:not(.hud2) .scorebox { display: none; }
+body.is-split::after { content: ""; position: fixed; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1px; background: var(--bg); z-index: 6; pointer-events: none; }
+.hud2 { top: 50%; }
+.p2tag { position: absolute; top: 12px; left: 16px; font: italic 800 22px/1 var(--display); color: var(--pink); text-shadow: 0 0 12px rgba(255, 63, 164, 0.6); }
+.hud2 .chain { top: 12px; }
+.p2dash { position: absolute; right: 18px; bottom: 16px; display: grid; justify-items: end; gap: 2px; padding: 10px 14px; background: var(--glass); border: 1px solid var(--line); border-radius: 8px; }
+.p2dash__speed { font: italic 800 44px/0.9 var(--display); }
+.p2score { position: absolute; left: 16px; bottom: 16px; display: grid; gap: 4px; padding: 8px 12px; background: var(--glass); border: 1px solid var(--line); border-radius: 6px; }
+
 /* Touch controls */
 .touch { position: fixed; z-index: 6; inset: auto 0 0 0; padding: 0 16px calc(16px + var(--safe-b)); display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none; }
 .touch__group { display: flex; gap: 10px; align-items: flex-end; }
@@ -371,6 +387,7 @@ body.is-touch .scorebox { display: none; }
     <div class="main__foot">
       <button class="btn" type="button" data-nav data-open="settings">Settings</button>
       <button class="btn btn--ghost" type="button" data-nav data-act="mute" id="btn-mute">Sound on</button>
+      <button class="btn btn--ghost" type="button" data-nav data-act="players" id="btn-players">1 Player</button>
       <div class="pad-note" id="pad-note" hidden>Controllers are blocked inside this embedded view. Open the game in its own browser tab to use one.</div>
       <div class="hints" aria-hidden="true">
         <span><b class="glyph">↑↓</b> Select</span><span><b class="glyph">Enter</b> / <b class="glyph">A</b> Go</span><span><b class="glyph">Esc</b> / <b class="glyph">B</b> Back</span>
@@ -490,6 +507,16 @@ body.is-touch .scorebox { display: none; }
     <button class="btn btn--sm" type="button" id="btn-pause">❚❚ Pause</button>
   </div>
   <div class="fps" id="fps" hidden></div>
+</div>
+<div class="hud hud2" id="hud2" hidden>
+  <div class="p2tag">P2</div>
+  <div class="chain is-idle" id="p2-chain">
+    <div class="chain__grade" id="p2-grade">DRIFT</div>
+    <div class="chain__pts" id="p2-points">0</div>
+    <div class="chain__meta"><span class="chain__mult" id="p2-mult">×1.0</span></div>
+  </div>
+  <div class="p2dash"><span class="p2dash__speed" id="p2-speed">0</span><span class="label" id="p2-units">km/h</span><span class="dash__gear" id="p2-gear">1</span></div>
+  <div class="p2score"><span class="label">P2 total</span><span class="scorebox__v" id="p2-total">0</span></div>
 </div>
 <div class="splash" id="splash"></div>
 

@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { CarBody } from '../../physics.js';
 import { buildSpec } from '../../garage.js';
-import { carLowGeometry } from '../../car.js';
+import { carLowGeometry, contactShadow } from '../../car.js';
 import { roadQuery, smooth } from './layout.js';
 
 const THRESHOLD = 25000; // night drift points for full heat
@@ -39,7 +39,7 @@ export class Police {
     const root = new THREE.Group();
     const body = new THREE.Mesh(this.geo.body, this.bodyMat);
     body.castShadow = true;
-    root.add(body, new THREE.Mesh(this.geo.lights, this.lightMat));
+    root.add(body, new THREE.Mesh(this.geo.lights, this.lightMat), contactShadow(this.geo.length, this.geo.width));
     const top = this.geo.roof + 0.06;
     const r = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 0.26), this.red);
     r.position.set(0.32, top, -0.35);
