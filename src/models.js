@@ -26,12 +26,22 @@ export async function loadModels(keys, onProgress) {
   await Promise.all(keys.map(async (key) => {
     const file = MODEL_FILES[key];
     if (!file) return;
-    if (!cache.has(key)) cache.set(key, loader.loadAsync(new URL(file, base).href).catch((e) => { console.warn(`model ${key} not loaded`, e?.message || e); return null; }));
+    if (!cache.has(key)) cache.set(key, fetchModel(new URL(`${file}.txt`, base).href).catch((e) => { console.warn(`model ${key} not loaded`, e?.message || e); return null; }));
     const g = await cache.get(key);
     if (g) out.set(key, g);
     onProgress?.(++done / keys.length);
   }));
   return out;
+}
+
+// The build ships each .glb as base64 text (the only kind of file the page host serves for it).
+async function fetchModel(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${url}`);
+  const bin = atob((await res.text()).trim());
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return loader.parseAsync(bytes.buffer, url.slice(0, url.lastIndexOf('/') + 1));
 }
 
 const assocNode = (parser, obj) => {

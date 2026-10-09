@@ -25,8 +25,11 @@ writeFileSync(
 // The downloaded models the game uses, slimmed down, next to the page (only redone when the source changes).
 for (const file of new Set(Object.values(MODEL_FILES))) {
   const src = `models/${file}`, dst = `dist/models/${file}`;
-  if (existsSync(dst) && statSync(dst).mtimeMs >= statSync(src).mtimeMs) continue;
-  mkdirSync(dirname(dst), { recursive: true });
-  await optimizeModel(src, dst, file.startsWith('animals/') ? ANIMAL_CLIPS : undefined);
+  if (!existsSync(dst) || statSync(dst).mtimeMs < statSync(src).mtimeMs) {
+    mkdirSync(dirname(dst), { recursive: true });
+    await optimizeModel(src, dst, file.startsWith('animals/') ? ANIMAL_CLIPS : undefined);
+  }
+  // Artifact hosting only serves web types, so the game fetches each model as base64 text.
+  writeFileSync(`${dst}.txt`, readFileSync(dst).toString('base64'));
 }
 console.log('built dist/game.js');
