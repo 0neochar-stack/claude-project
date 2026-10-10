@@ -20,7 +20,7 @@ const LOOK = { ...(CARS.find((c) => c.id === 's15') || CARS[0]).look, paint: 1, 
 const TAU = Math.PI * 2;
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const GRIP = 17; // m/s² of cornering he can pull: more than anyone else on the road
+const GRIP = 20; // m/s² of cornering he can pull: far more than anyone else on the road
 
 function nameTag() {
   const cv = document.createElement('canvas');
@@ -330,15 +330,15 @@ export class JohnDoe {
         const ahead = this.costFrom(road, this.s, this.dir), back = this.costFrom(road, this.s, -this.dir);
         if (back + 60 < ahead) { this.mode = 'jturn'; this.modeT = 0; this.jSide = Math.random() < 0.5 ? 1 : -1; this.turnIn = 8; this.plan = null; }
       }
-      if (this.mode === 'run' && street && this.manjiIn <= 0 && Math.random() < dt) { this.mode = 'manji'; this.modeT = 0; this.manjiIn = 10 + Math.random() * 10; }
+      if (this.mode === 'run' && this.manjiIn <= 0 && Math.random() < dt * (street ? 1.5 : 0.5)) { this.mode = 'manji'; this.modeT = 0; this.manjiIn = 5 + Math.random() * 5; }
     }
     if (this.mode === 'bump' && (this.hit || this.modeT > 5 || !onMyRoad)) { this.mode = this.hit ? 'showoff' : 'run'; this.modeT = 0; }
     if (this.mode === 'showoff' && this.modeT > 4.5) { this.mode = 'run'; }
-    if (this.mode === 'manji' && this.modeT > 3.2) { this.mode = 'run'; }
+    if (this.mode === 'manji' && this.modeT > 4) { this.mode = 'run'; }
 
     // ---- speed ----
     const far = dPlayer > 300;
-    let vWant = Math.min(road.speed * (street ? 1.9 : 2.3) * (far ? 1.35 : 1), far ? 60 : 46);
+    let vWant = Math.min(road.speed * (street ? 2.1 : 2.5) * (far ? 1.35 : 1), far ? 62 : 50);
     if (!this.plan && !this.curve) this.plan = this.planNext(player);
     const plan = this.plan;
     // Brake for the turn ahead so it's taken at the speed his grip allows (superhuman, but not infinite).
@@ -453,14 +453,17 @@ export class JohnDoe {
     const omega = dTravel / dt;
     this.omega += (omega - this.omega) * Math.min(1, dt * 6);
     const w = this.omega;
-    let target = Math.sign(w) * Math.min(1.25, Math.pow(Math.abs(w), 0.6) * 0.95);
-    if (Math.abs(w) < 0.05) target = 0; // straight means straight
-    if (plan && plan.kind === 'turn' && !this.curve && plan.timeTo < 0.5 && plan.turnSign) target = -plan.turnSign * 0.38; // the flick
-    if (this.mode === 'manji') target = Math.sign(Math.sin(this.modeT * 5.2)) * 0.85;
-    if (this.mode === 'showoff') target = Math.cos(this.modeT * 1.4) * 1.15; // big lazy swings across your nose
+    // Angle grows with how fast the path turns: about 20 degrees through a sweeper, 50 in a bend, 80+ in
+    // a junction turn.
+    let target = Math.sign(w) * Math.min(1.45, Math.sqrt(Math.abs(w)) * 1.3);
+    if (Math.abs(w) < 0.03) target = 0; // straight means straight
+    if (plan && plan.kind === 'turn' && !this.curve && plan.timeTo < 0.6 && plan.turnSign) target = -plan.turnSign * 0.55; // the flick
+    if (this.mode === 'manji') target = Math.sign(Math.sin(this.modeT * 4.6)) * 1.15;
+    if (this.mode === 'showoff') target = Math.cos(this.modeT * 1.4) * 1.4; // huge lazy swings across your nose
     if (this.mode === 'circle') target = (this.circle ? this.circle.w : 1) * 1.2;
     if (this.mode === 'bump') target = 0.15 * this.bumpSide;
-    const rate = this.mode === 'manji' ? 9 : Math.abs(target) > Math.abs(this.drift) ? 5 : 3.2;
+    // Snaps in fast, unwinds slowly: he holds the angle out of every corner.
+    const rate = this.mode === 'manji' ? 10 : Math.abs(target) > Math.abs(this.drift) ? 6 : 2.2;
     this.drift += (target - this.drift) * Math.min(1, dt * rate);
 
     // ---- the state the car model and the smoke read ----
@@ -489,7 +492,7 @@ export class JohnDoe {
     this.view.update(c, dt, ground);
     const dc = Math.hypot(c.x - cam.x, c.z - cam.z);
     this.tag.position.set(c.x, ground.y + 2.5 + Math.min(4, dc * 0.012), c.z);
-    this.tag.scale.set(3.6, 0.9, 1).multiplyScalar(clamp(dc / 45, 1, 8));
+    this.tag.scale.set(3.6, 0.9, 1).multiplyScalar(clamp(dc / 45, 1, 5));
 
     // Smoke and marks off the rear tyres.
     if (fx && dc < 260) {
@@ -499,7 +502,7 @@ export class JohnDoe {
         const st = clamp((slide - 2) / 9, 0, 1);
         fx.skids?.mark(100 + s, wx, wz, st > 0.08 ? 0.22 + st * 0.45 : 0, fx.clock, 0.25, ground.y + 0.03);
         const kk = s > 0 ? 1 : 0;
-        this.smoke[kk] += st * st * dt * (fx.rate || 60);
+        this.smoke[kk] += st * st * dt * (fx.rate || 60) * 1.8;
         while (this.smoke[kk] >= 1) {
           this.smoke[kk] -= 1;
           fx.particles.emit(wx, ground.y + 0.3, wz, c.vx * 0.3 + (Math.random() - 0.5) * 2.4, 0.4 + Math.random() * 0.6, c.vz * 0.3 + (Math.random() - 0.5) * 2.4, 1.0 + Math.random() * 0.4, 2.6, 2.2 + Math.random() * 1.4, 0.3);
