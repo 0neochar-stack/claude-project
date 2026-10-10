@@ -16,6 +16,7 @@ const DEFAULTS = {
   units: 'kmh',
   showFps: false,
   timeOfDay: 'cycle', // cycle | night | dusk | day
+  sky: 'earth', // see skies.js
   resolution: 'auto', // auto (adapts to keep the frame rate) | native | supersample (4K-style sharpness)
   players: 1,
   volume: 0.9,

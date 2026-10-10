@@ -25,6 +25,8 @@ import { createShowroom } from './worlds/showroom.js';
 import { createNeonWorld } from './worlds/neon.js';
 import { createOpenWorld } from './worlds/open.js';
 import { MODEL_CREDITS } from './modelList.js';
+import { Phone } from './phone.js';
+import { SKIES } from './skies.js';
 
 const $ = (id) => document.getElementById(id);
 const isTouch = matchMedia('(pointer: coarse)').matches;
@@ -577,7 +579,37 @@ function respawn() {
   hud.toast('Back on the road');
 }
 
+// ---------- the phone ----------
+const PHONE_TIMES = [{ id: 'cycle', name: 'Real cycle', note: 'One game hour a minute' }, { id: 'day', name: 'Midday' }, { id: 'dusk', name: 'Golden hour' }, { id: 'night', name: 'Midnight' }];
+const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
+const phone = new Phone({
+  call(id) {
+    if (id === 'lester') {
+      const had = world?.callOffPolice?.();
+      return had ? 'Lester: "Done. I scrubbed you off every camera from here to the coast. They\'ve lost you."' : 'Lester: "Nobody\'s looking for you. Yet. Call me when they are."';
+    }
+    if (id === 'mechanic') { setTimeout(() => respawn(), 400); return 'Mechanic: "Sit tight… there. Back on the road, good as new."'; }
+    if (id === 'hao') return pickOne(['Hao: "Clutch-kick into the slide, then feather the throttle. Don\'t just mash it."', 'Hao: "More angle needs more speed. Carry it in."', 'Hao: "Stiffen the rear, soften the front. Trust me."', 'Hao: "The touge at night. That\'s where the real ones go."']);
+    return pickOne(['Lamar: "You drive like my grandma, homie."', 'Lamar: "Yo, that last slide? Weak. Do it again."', 'Lamar: "I seen you on the news, dog. Respect."']);
+  },
+  skies: () => SKIES,
+  sky: () => settings.sky || 'earth',
+  setSky(id) { settings.set('sky', id); world?.setSky?.(id); },
+  times: () => PHONE_TIMES,
+  time: () => settings.timeOfDay,
+  setTime(id) { settings.set('timeOfDay', id); world?.setTimeOfDay?.(id); },
+  photo() { document.body.classList.add('is-photo'); hud.toast('Photo mode · F or D-pad up to exit'); },
+  stats: () => [['Best chain', fmt.format(Math.round(score.best))], ['Lifetime points', fmt.format(Math.round(score.total))], ['Credits', `${fmt.format(profile.credits)} CR`], ['Top speed now', `${Math.round(car.speed * 3.6)} km/h`]],
+  mute: () => toggleMute(),
+});
+
 function handleAction(a) {
+  if (a === 'phone') {
+    if (document.body.classList.contains('is-photo')) { document.body.classList.remove('is-photo'); return; }
+    if (state === 'drive' && !screens.current) phone.toggle();
+    return;
+  }
+  if (phone.open && state === 'drive' && phone.action(a)) return;
   if (screens.current) {
     if (a === 'help' && screens.current === 'pause') { resume(); return; }
     screens.action(a);
@@ -768,6 +800,8 @@ function frame(now) {
   frameNo++;
 
   input.menuMode = !!screens.current;
+  if (phone.open && state !== 'drive') phone.close();
+  input.phoneMode = phone.open;
   const controls = input.poll(dt);
   for (const a of input.takeActions()) handleAction(a);
 

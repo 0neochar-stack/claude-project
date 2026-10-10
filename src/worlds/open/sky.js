@@ -1,6 +1,7 @@
 // Sky dome, sun, moon and stars, with the lighting for any time of day. One shader on a sphere that follows
 // the camera; light colours and fog come from the same keyframes so everything agrees.
 import * as THREE from 'three';
+import { SKY_GLSL_FUNCS, SKY_GLSL_MAIN, THEME_INDEX, gradeSky, fairyCastle } from '../../skies.js';
 
 // Keyframes by sun elevation (radians): zenith, horizon, sun light colour and strength, ambient sky/ground.
 const KEYS = [
@@ -29,7 +30,10 @@ export class Sky {
       uHor: { value: new THREE.Color() },
       uNight: { value: 0 },
       uTime: { value: 0 },
+      uTheme: { value: 0 },
     };
+    this.theme = 'earth';
+    this.radius = radius;
     const mat = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
       side: THREE.BackSide,
@@ -49,6 +53,7 @@ export class Sky {
         float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
           float a = hash(vec3(i, 1.0)), b = hash(vec3(i + vec2(1, 0), 1.0)), c = hash(vec3(i + vec2(0, 1), 1.0)), d = hash(vec3(i + 1.0, 1.0));
           return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
+        ${SKY_GLSL_FUNCS}
         void main() {
           vec3 d = normalize(vDir);
           float h = max(d.y, 0.0);
@@ -77,6 +82,7 @@ export class Sky {
             col += vec3(0.85, 0.9, 1.0) * smoothstep(0.9993, 0.9996, md) * uNight * 1.6;
             col += vec3(0.25, 0.3, 0.5) * pow(max(md, 0.0), 60.0) * uNight * 0.35;
           }
+          ${SKY_GLSL_MAIN}
           gl_FragColor = vec4(col, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -94,10 +100,23 @@ export class Sky {
     this.fog = new THREE.Fog(0x000000, 200, 2000);
     this.background = new THREE.Color();
     this.state = { night: 0, exposure: 1, sunE: 0 };
+    // The fairy kingdom's castle, out in the sky to the north-west.
+    this.castle = fairyCastle();
+    this.castle.scale.setScalar(Math.max(2.5, radius / 450));
+    this.castle.visible = false;
+  }
+
+  // A sky theme from skies.js: planets, galaxies, twin suns, the castle.
+  setTheme(id) {
+    this.theme = id in THEME_INDEX ? id : 'earth';
+    this.uniforms.uTheme.value = THEME_INDEX[this.theme];
+    this.castle.visible = this.theme === 'fairy';
+    if (this.hours !== undefined) this.setTime(this.hours);
   }
 
   // hours: 0..24. Sun rises at 6 in the east (+x), sets at 18 in the west, a little to the south.
   setTime(hours) {
+    this.hours = hours;
     const a = ((hours - 6) / 24) * Math.PI * 2;
     const e = Math.sin(a) * 1.15;
     const dir = new THREE.Vector3(Math.cos(a), Math.sin(a) * 0.95, -0.35).normalize();
@@ -118,14 +137,24 @@ export class Sky {
     sample(el, 'gnd', this.hemi.groundColor);
     this.hemi.intensity = sample(el, 'hemiI');
     this.moon.intensity = 0.28 * night;
+    gradeSky(this.theme, this.uniforms.uZen.value, this.uniforms.uHor.value, this.hemi, night);
     this.fog.color.copy(this.uniforms.uHor.value).lerp(this.uniforms.uZen.value, 0.25);
     this.background.copy(this.fog.color);
     void e;
   }
 
+  // Sky objects stay put relative to the camera, like the dome.
+  followCamera(p) {
+    if (!this.castle.visible) return;
+    const D = this.radius * 0.6;
+    this.castle.position.set(p.x - 0.6 * D, p.y + D * 0.16, p.z + 0.8 * D);
+    this.castle.rotation.y = 0.6;
+  }
+
   // The sun's shadow box follows the car.
   follow(x, y, z) {
     this.mesh.position.set(x, y, z);
+
     const d = this.sunDir || new THREE.Vector3(0, 1, 0);
     const up = Math.max(0.15, d.y);
     this.sun.position.set(x + (d.x / up) * 80, y + 80, z + (d.z / up) * 80);

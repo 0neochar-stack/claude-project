@@ -9,8 +9,10 @@ const KEYS = {
 };
 const ACTIONS = {
   KeyE: 'shiftUp', KeyQ: 'shiftDown', KeyC: 'camera', KeyR: 'reset', KeyG: 'gearbox',
-  KeyT: 'assist', KeyP: 'paint', KeyM: 'mute', KeyH: 'help', Escape: 'help', KeyV: 'view',
+  KeyT: 'assist', KeyP: 'paint', KeyM: 'mute', KeyH: 'help', Escape: 'help', KeyV: 'view', KeyF: 'phone',
 };
+// While the phone is up the arrow keys, Enter and Backspace work it instead of the car.
+const PHONE_KEYS = { ArrowUp: 'navUp', ArrowDown: 'navDown', ArrowLeft: 'navLeft', ArrowRight: 'navRight', Enter: 'confirm', Backspace: 'back' };
 
 export class Input {
   constructor() {
@@ -36,7 +38,9 @@ export class Input {
       this.onPadStatus?.('disconnected', e.gamepad.id);
     });
     this.kbSteer = 0;
+    this.phoneMode = false;
     addEventListener('keydown', (e) => {
+      if (this.phoneMode && e.code in PHONE_KEYS) { e.preventDefault(); this.actions.push(PHONE_KEYS[e.code]); return; }
       if (e.code in ACTIONS && !e.repeat) this.actions.push(ACTIONS[e.code]);
       if (Object.values(KEYS).flat().includes(e.code)) e.preventDefault();
       this.down.add(e.code);
@@ -124,7 +128,7 @@ export class Input {
       const dz = 0.12;
       x = Math.abs(x) < dz ? 0 : Math.sign(x) * ((Math.abs(x) - dz) / (1 - dz)) ** 1.3;
       let steer = -x;
-      if (!this.menuMode) { if (dpad.left) steer = 1; if (dpad.right) steer = -1; }
+      if (!this.menuMode && !this.phoneMode) { if (dpad.left) steer = 1; if (dpad.right) steer = -1; }
       let gas = btn(7), brake = btn(6);
       if (pad.mapping !== 'standard' && pad.axes.length >= 6) {
         // Many non-standard mappings report triggers as axes 2 and 5, resting at -1.
@@ -134,7 +138,7 @@ export class Input {
       }
       const an = st.analog;
       an.steer = steer; an.throttle = gas; an.brake = brake;
-      an.handbrake = btn(0) > 0.5 || btn(1) > 0.5;
+      an.handbrake = !this.phoneMode && (btn(0) > 0.5 || btn(1) > 0.5); // A and B work the phone while it's up
       an.clutch = btn(2) > 0.5;
       // Right stick: look around / orbit the car in the garage.
       const rs = (i) => { const v = axis(i); return Math.abs(v) < 0.15 ? 0 : v; };
@@ -159,9 +163,11 @@ export class Input {
       // In menus the D-pad and left stick move focus, A confirms, B goes back and the bumpers flip tabs.
       const edges = this.menuMode
         ? { 0: 'confirm', 1: 'back', 9: 'help', 4: 'tabPrev', 5: 'tabNext' }
-        : { 0: 'confirm', 9: 'help', 5: 'shiftUp', 4: 'shiftDown', 3: 'camera', 8: 'reset', 12: 'view', 13: 'assist' };
-      if (this.menuMode) {
-        const sx = pad.axes[0] || 0, sy = pad.axes[1] || 0;
+        : this.phoneMode ? { 0: 'confirm', 1: 'back', 9: 'help' }
+        : { 0: 'confirm', 9: 'help', 5: 'shiftUp', 4: 'shiftDown', 3: 'camera', 8: 'reset', 12: 'phone', 11: 'view', 13: 'assist' };
+      if (this.menuMode || this.phoneMode) {
+        // The phone only takes the D-pad: the stick still steers.
+        const sx = this.phoneMode ? 0 : pad.axes[0] || 0, sy = this.phoneMode ? 0 : pad.axes[1] || 0;
         const dir = dpad.up ? 'navUp' : dpad.down ? 'navDown' : dpad.left ? 'navLeft' : dpad.right ? 'navRight'
           : Math.abs(sy) > 0.6 ? (sy > 0 ? 'navDown' : 'navUp') : Math.abs(sx) > 0.6 ? (sx > 0 ? 'navRight' : 'navLeft') : null;
         const now = performance.now();

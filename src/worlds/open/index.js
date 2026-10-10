@@ -80,6 +80,8 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   const far = preset.far;
   const sky = new Sky(Math.min(far * 0.9, 3800));
   root.add(sky.mesh, sky.sun, sky.sunTarget, sky.hemi, sky.moon);
+  root.add(sky.castle);
+  sky.setTheme(settings.sky || 'earth');
   const shadows = preset.shadows > 0;
   if (shadows) {
     sky.sun.castShadow = true;
@@ -374,6 +376,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       sky.follow(car.x, groundHeight(car.x, car.z), car.z);
       sky.uniforms.uTime.value = t;
       sky.mesh.position.copy(camPos);
+      sky.followCamera(camPos);
       wind = 0.5 + 0.5 * Math.sin(t * 0.21) * Math.sin(t * 0.13 + 2);
       nature.update(t, dt, camera, wind, particles);
       water.update(t, dt, camPos, car, particles, sound, ctx.hud);
@@ -396,6 +399,13 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
     },
     // Before each view is drawn (twice a frame in split screen): pick the instanced copies it can see.
     render(r, s, cam) { nature.cull(cam); decor.cull(cam); },
+    // Lester on the phone: any chase is dropped and the heat wiped. True if there was anything to lose.
+    setSky(id) { sky.setTheme(id); env.moodChanged = true; },
+    callOffPolice() {
+      const had = police.state !== 'calm' || police.heat > 0.05;
+      police.reset();
+      return had;
+    },
     onBank(points) { police.onDrift(points, sky.state.night); },
     // Back on the road keeps any chase going; a fresh start clears everything.
     onReset(kind) { if (kind !== 'respawn') { police.reset(); traffic.reset?.(); } bins.reset(); },
