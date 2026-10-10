@@ -1,0 +1,55 @@
+{
+  "temecula": {
+    "name": "Temecula, California",
+    "boundary": {
+      "name": "Temecula",
+      "admin_level": "8"
+    },
+    "bbox": [
+      33.42,
+      -117.24,
+      33.56,
+      -117.04
+    ],
+    "spawn": {
+      "brand": "Albertsons",
+      "nearStreet": "Margarita Road",
+      "label": "Albertsons parking lot, Margarita Road"
+    },
+    "imagery": [
+      {
+        "lod": 0,
+        "mpp": 2.4,
+        "tile": 2048
+      },
+      {
+        "lod": 1,
+        "mpp": 1.2,
+        "tile": 1024,
+        "radius": 3000
+      },
+      {
+        "lod": 2,
+        "mpp": 0.6,
+        "tile": 1024,
+        "radius": 1000
+      }
+    ]
+  },
+  "fixture": {
+    "name": "Test fixture (synthetic)",
+    "hidden": true,
+    "bbox": [
+      33.496,
+      -117.158,
+      33.506,
+      -117.146
+    ],
+    "spawn": {
+      "brand": "Albertsons",
+      "nearStreet": "Margarita Road",
+      "label": "Albertsons parking lot (fixture)"
+    },
+    "imagery": []
+  }
+}
