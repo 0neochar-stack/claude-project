@@ -5,8 +5,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bakeStatic } from '../../models.js';
 import { InstanceField, impostor } from '../../instanceField.js';
-import { groundColor } from './terrain.js';
-import { HALF, LA, VILLAGE, PEAK, heightAt, roadQuery, rng, fbm, smooth, PCH_Z, BOULEVARD_Z, inLot } from './layout.js';
+import { buildGrass } from './grass.js';
+import { clamp, HALF, LA, VILLAGE, PEAK, heightAt, roadQuery, rng, fbm, smooth, PCH_Z, BOULEVARD_Z, inLot } from './layout.js';
 
 const wind = { uTime: { value: 0 }, uWind: { value: 0.5 } };
 
@@ -375,7 +375,7 @@ export function buildNature(net, heights, preset, extra = {}) {
   for (const t of extra.sakuraSpots || []) add('sakura', t.x, t.z, t.s ?? 1);
 
   // Forest on the mountain, oaks and brush on the hills: jittered grid thinned by noise.
-  const step = 10.5 / Math.sqrt(Math.max(0.35, density));
+  const step = 8 / Math.sqrt(Math.max(0.35, density));
   for (let x = -HALF + 20; x < HALF - 20; x += step) for (let z = -HALF + 20; z < HALF - 20; z += step) {
     const px = x + (R() - 0.5) * step * 0.9, pz = z + (R() - 0.5) * step * 0.9;
     const dPeak = Math.hypot(px - PEAK.x, pz - PEAK.z);
@@ -385,15 +385,16 @@ export function buildNature(net, heights, preset, extra = {}) {
     if (vill) continue;
     const n = fbm(px * 0.004, pz * 0.004, 3);
     const mountain = 1 - smooth(450, 950, dPeak);
-    const want = mountain * (0.75 + n * 0.5) + (1 - mountain) * Math.max(0, n * 0.9 + 0.08) * 0.5;
+    // Groves and woods on the hills (thickest where the noise is high), forest on the mountain.
+    const want = mountain * (0.75 + n * 0.5) + (1 - mountain) * clamp(0.16 + n * 0.75, 0.04, 0.85);
     if (R() > want) continue;
     if (nearRoad(px, pz, 4) || net.lots.some((l) => inLot(l, px, pz, l.id === 'summit' ? 75 : 14))) continue;
     const y = heightAt(heights, px, pz);
     const sl = Math.hypot(heightAt(heights, px + 2, pz) - heightAt(heights, px - 2, pz), heightAt(heights, px, pz + 2) - heightAt(heights, px, pz - 2)) / 4;
     if (y < 1.5 || sl > 1.0) continue;
-    if (mountain > 0.35) add('cedar', px, pz, 0.8 + R() * 0.5);
+    if (mountain > 0.35) add('cedar', px, pz, 0.85 + R() * 0.85);
     else {
-      add('oak', px, pz, 0.7 + R() * 0.6);
+      add('oak', px, pz, 0.8 + R() * 1.1);
       // Undergrowth round the hill trees.
       for (let k = RB() < 0.85 ? 1 + Math.floor(RB() * 4) : 0; k > 0; k--) {
         const a = RB() * Math.PI * 2, d = 2.5 + RB() * 5, bx = px + Math.cos(a) * d, bz = pz + Math.sin(a) * d;
@@ -426,8 +427,8 @@ export function buildNature(net, heights, preset, extra = {}) {
   // Scrub, boulders and grass everywhere off the roads outside town: a fine jittered grid, thinned by
   // noise, densest near the roads where you see it. Its own random stream keeps the trees in place.
   {
-    const RG = rng(777001), gc = new THREE.Color();
-    const gstep = 3.2 / Math.sqrt(Math.max(0.35, density));
+    const RG = rng(777001);
+    const gstep = 5 / Math.sqrt(Math.max(0.35, density));
     for (let x = -HALF + 10; x < HALF - 10; x += gstep) for (let z = -HALF + 10; z < HALF - 10; z += gstep) {
       const px = x + (RG() - 0.5) * gstep, pz = z + (RG() - 0.5) * gstep;
       if (px > LA.x0 - 10 && px < LA.x1 + 10 && pz > LA.z0 - 10 && pz < LA.z1 + 10) continue;
@@ -446,12 +447,9 @@ export function buildNature(net, heights, preset, extra = {}) {
       const sl = Math.hypot(heightAt(heights, px + 2, pz) - heightAt(heights, px - 2, pz), heightAt(heights, px, pz + 2) - heightAt(heights, px, pz - 2)) / 4;
       if (sl > 0.9) continue;
       const pick = RG();
-      if (pick < 0.035 && edge > 3) lists.bush.push({ x: px, z: pz, y, s: 0.6 + RG() * 0.8, rot: RG() * 6.28, variant: Math.floor(RG() * 60) });
-      else if (pick < 0.05 && edge > 2) lists.rock.push({ x: px, z: pz, y, s: 0.12 + RG() * 0.3, rot: RG() * 6.28, variant: Math.floor(RG() * 60) });
-      else {
-        groundColor(px, pz, y, sl, gc);
-        lists.grass.push({ x: px, z: pz, y, s: 0.7 + RG() * 0.7, rot: RG() * 6.28, variant: Math.floor(RG() * 60), color: gc.clone().multiplyScalar(1.25) });
-      }
+      if (pick < 0.09 && edge > 3) lists.bush.push({ x: px, z: pz, y, s: 0.6 + RG() * 0.8, rot: RG() * 6.28, variant: Math.floor(RG() * 60) });
+      else if (pick < 0.13 && edge > 2) lists.rock.push({ x: px, z: pz, y, s: 0.12 + RG() * 0.3, rot: RG() * 6.28, variant: Math.floor(RG() * 60) });
+      // (grass itself is the GPU field in grass.js)
     }
   }
   for (const t of extra.rocks || []) add('rock', t.x, t.z, t.s ?? 1);
@@ -511,16 +509,39 @@ export function buildNature(net, heights, preset, extra = {}) {
   };
   const height = { palm: 18, sakura: 7, cedar: 24, oak: 10, rock: 2, bush: 2, maple: 2.5, grass: 0.8 };
   const field = new InstanceField({ cell: 48, shadows: preset.shadows > 0 });
+  // Nothing grows inside the roadside stores.
+  const stores = extra.stores || [];
+  const inStore = (x, z) => stores.some((st) => Math.abs(st.x - x) < st.w / 2 + 9 && Math.abs(st.z - z) < st.w / 2 + 9 && Math.hypot(st.x - x, st.z - z) < Math.hypot(st.w, st.d) / 2 + 3);
+  // Every copy gets its own shade: greens from blue-green to yellow, the odd tree already turning, pinks
+  // from white to deep rose; rocks between grey and sandstone.
+  const RT = rng(8086), tc = new THREE.Color();
+  const tint = (kind) => {
+    const v = 0.82 + RT() * 0.36;
+    if (kind === 'oak' || kind === 'bush') {
+      const autumn = RT();
+      if (autumn < 0.07) return tc.setHSL(0.07 + RT() * 0.05, 0.75, 0.62).multiplyScalar(1.5).clone();
+      if (autumn < 0.16) return tc.setRGB(1.25, 1.1, 0.55).multiplyScalar(v).clone();
+      return tc.setRGB(0.85 + RT() * 0.3, 1, 0.75 + RT() * 0.35).multiplyScalar(v).clone();
+    }
+    if (kind === 'cedar') return tc.setRGB(0.8 + RT() * 0.2, 0.9 + RT() * 0.2, 0.85 + RT() * 0.3).multiplyScalar(v).clone();
+    if (kind === 'sakura') return tc.setRGB(1, 0.8 + RT() * 0.25, 0.85 + RT() * 0.2).multiplyScalar(v).clone();
+    if (kind === 'maple') return tc.setRGB(1, 0.6 + RT() * 0.6, 0.5 + RT() * 0.3).multiplyScalar(v).clone();
+    if (kind === 'rock') { const w = RT(); return tc.setRGB(1 + w * 0.25, 1 + w * 0.1, 1 - w * 0.15).multiplyScalar(v).clone(); }
+    return tc.setScalar(v).clone();
+  };
   for (const [kind, list] of Object.entries(lists)) {
     if (!models[kind]?.length || !list.length) continue; // a downloaded model that didn't load
-    models[kind].forEach((m, v) => field.addKind(`${kind}:${v}`, { lods: plan[kind](m).filter((l) => l.parts), height: height[kind], shadow: kind !== 'bush' && kind !== 'grass', color: kind === 'grass' }));
+    models[kind].forEach((m, v) => field.addKind(`${kind}:${v}`, { lods: plan[kind](m).filter((l) => l.parts), height: height[kind], shadow: kind !== 'bush' && kind !== 'grass', color: kind !== 'palm' }));
     for (const t of list) {
-      field.add(`${kind}:${t.variant % models[kind].length}`, t.x, t.y - (kind === 'grass' ? 0.05 : 0.15), t.z, t.rot, t.s, t.color);
+      if (stores.length && inStore(t.x, t.z)) continue;
+      field.add(`${kind}:${t.variant % models[kind].length}`, t.x, t.y - (kind === 'grass' ? 0.05 : 0.15), t.z, t.rot, t.s, t.color || tint(kind));
       if (kind === 'bush' || kind === 'maple' || kind === 'grass') continue; // you can plough through these
       if (kind !== 'rock' || t.s > 1) colliders.push({ type: 'circle', x: t.x, z: t.z, r: radius[kind] * t.s * (kind === 'rock' ? 1.1 : 1) });
     }
   }
   group.add(field.build());
+  const grass = extra.terrainColors ? buildGrass(net, heights, extra.terrainColors, extra.stores, preset, wind) : null;
+  if (grass) group.add(grass.mesh);
   const m4 = new THREE.Matrix4(), qt = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
 
   // ---------- petals ----------
@@ -541,13 +562,36 @@ export function buildNature(net, heights, preset, extra = {}) {
     group.add(carpet);
   }
 
+  // ---------- falling leaves ----------
+  // Leaves let go of the broadleaf trees and maples near the camera and tumble down in the wind:
+  // green, yellow and the odd orange one, red under the maples.
+  const leafTrees = [...lists.oak, ...lists.maple];
+  const LEAF = Math.round(1400 * Math.max(0.5, density));
+  const lPos = new Float32Array(LEAF * 3), lVel = new Float32Array(LEAF * 3), lLife = new Float32Array(LEAF), lCol = new Float32Array(LEAF * 3);
+  lPos.fill(-1000);
+  const leafGeo = new THREE.BufferGeometry();
+  leafGeo.setAttribute('position', new THREE.BufferAttribute(lPos, 3).setUsage(THREE.DynamicDrawUsage));
+  leafGeo.setAttribute('color', new THREE.BufferAttribute(lCol, 3).setUsage(THREE.DynamicDrawUsage));
+  const leaves = new THREE.Points(leafGeo, new THREE.PointsMaterial({ vertexColors: true, size: 0.14, sizeAttenuation: true, transparent: true, opacity: 0.95, depthWrite: false }));
+  leaves.frustumCulled = false;
+  group.add(leaves);
+  let leafCursor = 0, leafAcc = 0;
+  const leafGrid = new Map();
+  for (const t of leafTrees) { const k = `${Math.floor(t.x / 60)},${Math.floor(t.z / 60)}`; if (!leafGrid.has(k)) leafGrid.set(k, []); leafGrid.get(k).push(t); }
+  const nearTrees = [];
+  let nearKey = '';
+
   return {
     group,
     colliders,
     lists,
     field,
+    // Distant cards' self-light fades out at night.
+    setNight(n) {
+      for (const k of field.kinds.values()) for (const l of k.lods) for (const [, m] of l.parts) if (m.userData.impostor) m.emissiveIntensity = 0.35 * (1 - n);
+    },
     // Picks what to draw for a camera; called before each view is rendered.
-    cull(camera) { field.update(camera); },
+    cull(camera) { field.update(camera); grass?.update(camera.position); },
     // camera: the view camera (its position drives the petals).
     update(t, dt, camera, windLevel, particles) {
       const cam = camera.position;
@@ -579,6 +623,47 @@ export function buildNature(net, heights, preset, extra = {}) {
         if (petLife[i] <= 0) petPos[k + 1] = -1000;
       }
       petGeo.attributes.position.needsUpdate = true;
+      // Leaves: the trees within about 60 m, refreshed as the camera moves between 60 m cells.
+      const key = `${Math.floor(cam.x / 60)},${Math.floor(cam.z / 60)}`;
+      if (key !== nearKey) {
+        nearKey = key;
+        nearTrees.length = 0;
+        const [kx, kz] = key.split(',').map(Number);
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const t of leafGrid.get(`${kx + a},${kz + b}`) || []) nearTrees.push(t);
+      }
+      leafAcc += dt * 70 * (0.3 + windLevel);
+      while (leafAcc >= 1 && nearTrees.length) {
+        leafAcc -= 1;
+        const tree = nearTrees[Math.floor(Math.random() * nearTrees.length)];
+        const i = leafCursor;
+        leafCursor = (leafCursor + 1) % LEAF;
+        const maple = lists.maple.includes(tree);
+        const a = Math.random() * Math.PI * 2, r = Math.random() * (maple ? 1.2 : 3) * tree.s;
+        lPos[i * 3] = tree.x + Math.cos(a) * r; lPos[i * 3 + 1] = tree.y + (maple ? 1.5 : 3 + Math.random() * 5) * tree.s; lPos[i * 3 + 2] = tree.z + Math.sin(a) * r;
+        lVel[i * 3] = 0.4 + Math.random() * 0.8; lVel[i * 3 + 1] = -0.7 - Math.random() * 0.5; lVel[i * 3 + 2] = (Math.random() - 0.5) * 0.9;
+        const c = Math.random();
+        if (maple) { lCol[i * 3] = 0.85; lCol[i * 3 + 1] = 0.12 + c * 0.2; lCol[i * 3 + 2] = 0.08; }
+        else if (c < 0.55) { lCol[i * 3] = 0.35; lCol[i * 3 + 1] = 0.55; lCol[i * 3 + 2] = 0.15; }
+        else if (c < 0.85) { lCol[i * 3] = 0.8; lCol[i * 3 + 1] = 0.7; lCol[i * 3 + 2] = 0.2; }
+        else { lCol[i * 3] = 0.85; lCol[i * 3 + 1] = 0.4; lCol[i * 3 + 2] = 0.1; }
+        lLife[i] = 12;
+      }
+      for (let i = 0; i < LEAF; i++) {
+        if (lLife[i] <= 0) continue;
+        lLife[i] -= dt;
+        const k = i * 3;
+        if (lVel[k + 1] === 0) { if (lLife[i] <= 0) lPos[k + 1] = -1000; continue; } // landed
+        // Tumbling: a side-to-side flutter on top of the drift.
+        const flutter = Math.sin(t * 4.2 + i * 1.7);
+        lPos[k] += (lVel[k] * (0.4 + windLevel * 1.2) + flutter * 0.7) * dt;
+        lPos[k + 1] += (lVel[k + 1] * (0.75 + 0.25 * Math.abs(flutter))) * dt;
+        lPos[k + 2] += (lVel[k + 2] + Math.cos(t * 3.1 + i) * 0.5) * dt;
+        const gy = heightAt(heights, lPos[k], lPos[k + 2]) + 0.04;
+        if (lPos[k + 1] < gy) { lPos[k + 1] = gy; lVel[k] = 0; lVel[k + 2] = 0; lVel[k + 1] = 0; if (lLife[i] > 3) lLife[i] = 3; }
+        if (lLife[i] <= 0) lPos[k + 1] = -1000;
+      }
+      leafGeo.attributes.position.needsUpdate = true;
+      leafGeo.attributes.color.needsUpdate = true;
       void particles;
     },
   };

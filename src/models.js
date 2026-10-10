@@ -155,9 +155,11 @@ export function bakeStatic(gltf, opts = {}) {
 // Places many copies of baked variants through an InstanceField: only cells in view are drawn, within
 // the draw distance.
 export class Scatter {
-  constructor({ tile = 64, far = 600, shadows = true } = {}) {
+  // fixed: everything draws out to `far` (for big things placed at large scales).
+  constructor({ tile = 64, far = 600, shadows = true, fixed = false } = {}) {
     this.field = new InstanceField({ cell: tile, shadows });
     this.far = far;
+    this.fixed = fixed;
     this.ids = new Map(); // variant -> kind id
   }
 
@@ -168,7 +170,7 @@ export class Scatter {
       id = `v${this.ids.size}`;
       this.ids.set(variant, id);
       // Small things drop out sooner than big ones.
-      const dist = Math.min(this.far, Math.max(90, variant.size.y * 60));
+      const dist = this.fixed ? this.far : Math.min(this.far, Math.max(90, variant.size.y * 60));
       this.field.addKind(id, { lods: [{ parts: variant.parts.map((p) => [p.geometry, p.material]), dist }], height: variant.size.y, shadow: variant.size.y > 1.2 });
     }
     this.field.add(id, x, y, z, rot, s);

@@ -200,7 +200,9 @@ export function impostor(renderer, parts, { size = 256 } = {}) {
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   geo.translate(cx * 0, 0, 0);
-  const mat = new THREE.MeshStandardMaterial({ map: rt.texture, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 });
+  // A little self-light from the texture: flat cards facing up catch less sun than a real crown does.
+  const mat = new THREE.MeshStandardMaterial({ map: rt.texture, emissiveMap: rt.texture, emissive: 0xffffff, emissiveIntensity: 0.35, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 });
+  mat.userData.impostor = true;
   return [[geo, mat]];
 }
 

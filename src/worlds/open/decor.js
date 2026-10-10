@@ -22,7 +22,7 @@ export function buildDecor(net, heights, assets, preset, extra = {}) {
     return baked.get(key);
   };
   const props = new Scatter({ tile: 48, far: Math.min(preset.far * 0.35, 420), shadows: preset.shadows > 0 });
-  const big = new Scatter({ tile: 128, far: Math.min(preset.far, 2400), shadows: preset.shadows > 0 });
+  const big = new Scatter({ tile: 128, far: Math.min(preset.far, 2400), shadows: preset.shadows > 0, fixed: true });
   const circle = (x, z, r) => colliders.push({ type: 'circle', x, z, r });
   const box = (x, z, w, d, a, tall = true) => colliders.push({ type: 'box', x, z, hx: w / 2, hz: d / 2, a, tall });
   // Facing: models face +z; rot turns that toward (sin rot, cos rot).
@@ -142,6 +142,33 @@ export function buildDecor(net, heights, assets, preset, extra = {}) {
       props.add(kind, x, ground(x, z) + (kind === M.cup ? 0 : 0.0), z, R() * 6.28);
     }
   }
+  // Around every roadside store: vending machines by the Japanese shops, dumpsters and bags out back of
+  // the American ones, crates at the fruit stands, propane at the garages.
+  for (const st of extra.stores || []) {
+    const L = (u, v) => ({ x: st.x + u * Math.cos(st.rot) + v * Math.sin(st.rot), z: st.z - u * Math.sin(st.rot) + v * Math.cos(st.rot) });
+    const y = st.y;
+    if (st.japan && M.vending) {
+      const n = 1 + Math.floor(R() * 3);
+      for (let i = 0; i < n; i++) { const p = L(st.w / 2 + 0.7 + i * 1.05, st.d / 2 - 0.6); props.add(M.vending, p.x, ground(p.x, p.z), p.z, st.rot); }
+      const c = L(st.w / 2 + 0.7 + (n - 1) * 0.52, st.d / 2 - 0.6); box(c.x, c.z, n * 1.05, 0.9, st.rot);
+    }
+    if (!st.japan) {
+      const d = R() < 0.5 ? M.dumpster : M.dumpsterB || M.dumpster;
+      const p = L(-st.w / 2 + 1.6, -st.d / 2 - 1.4);
+      if (d) { props.add(d, p.x, ground(p.x, p.z), p.z, st.rot + Math.PI); box(p.x, p.z, d.size.x, d.size.z, st.rot, false); }
+      if (M.bag) for (let i = 0; i < 2 + Math.floor(R() * 4); i++) { const b = L(-st.w / 2 + 3.2 + R() * 2.5, -st.d / 2 - 0.8 - R() * 1.5); props.add(M.bag, b.x, ground(b.x, b.z), b.z, R() * 6.28, 0.8 + R() * 0.4); }
+    }
+    if ((st.style === 'fruit' || st.style === 'taco' || st.style === 'tea') && M.crate) {
+      for (let i = 0; i < 5; i++) { const c = L(-st.w / 2 + 0.6 + i * 0.9, st.d / 2 + 1.4); props.add(M.crate, c.x, ground(c.x, c.z), c.z, st.rot + (R() - 0.5) * 0.3, 0.9 + R() * 0.3); if (R() < 0.4) props.add(M.crate, c.x, ground(c.x, c.z) + 0.75, c.z, st.rot + R() * 0.4); }
+    }
+    if (st.style === 'auto') {
+      if (M.gasTank) for (let i = 0; i < 4; i++) { const c = L(st.w / 2 + 1.2, -st.d / 2 + 1 + i * 1.1); props.add(M.gasTank, c.x, ground(c.x, c.z), c.z, R() * 6.28); }
+      if (M.barrier) { const c = L(0, st.d / 2 + 4); props.add(M.barrier, c.x, ground(c.x, c.z), c.z, st.rot + Math.PI / 2); }
+    }
+    if (M.box && R() < 0.6) for (let i = 0; i < 3; i++) { const c = L(st.w / 2 + 0.8, -st.d / 2 + 0.8 + i * 0.6); props.add(M.box, c.x, ground(c.x, c.z) + (i === 2 ? 0.42 : 0), c.z, R() * 0.6); }
+    if (M.can || M.cup) for (let i = 0; i < 6; i++) { const c = L((R() - 0.5) * st.w * 1.4, st.d / 2 + 1 + R() * 5); const k = R() < 0.5 ? M.can : M.cup; if (k) props.add(k, c.x, ground(c.x, c.z), c.z, R() * 6.28); }
+    if (M.hydrant && !st.japan && R() < 0.5) { const c = L(st.w / 2 + 3, st.d / 2 + 4); props.add(M.hydrant, c.x, ground(c.x, c.z), c.z, R() * 6.28); circle(c.x, c.z, 0.25); }
+  }
   // Roadworks on the coast road: a few striped barriers on the shoulder.
   if (M.barrier) {
     const r = net.byId.pch;
@@ -255,6 +282,73 @@ export function buildDecor(net, heights, assets, preset, extra = {}) {
     const t = extra.toriiSpot;
     big.add(torii, t.x, ground(t.x, t.z) - 0.1, t.z, t.rot);
     for (const s of [-1, 1]) circle(t.x + Math.cos(t.rot) * s * torii.size.x * 0.36, t.z - Math.sin(t.rot) * s * torii.size.x * 0.36, 0.35);
+  }
+
+  // ---------- rock formations ----------
+  // Big outcrops and stretched-up spires across the open country, so the hills aren't one long view.
+  {
+    const RR = rng(9917);
+    const base = [model('rockA', { length: 1, matte: true }), model('rockB', { length: 1, matte: true })].filter(Boolean);
+    // Tall versions: the same rocks pulled up 2.6 times.
+    const spires = base.map((v) => {
+      const parts = v.parts.map((p) => ({ geometry: p.geometry.clone().scale(1, 2.6, 1), material: p.material }));
+      for (const q of parts) { q.geometry.computeVertexNormals(); q.geometry.computeBoundingSphere(); }
+      return { parts, size: v.size.clone().multiply(new THREE.Vector3(1, 2.6, 1)), radius: v.radius };
+    });
+    let placed = 0;
+    for (let tries = 0; tries < 6000 && placed < 280 && base.length; tries++) {
+      const x = (RR() - 0.5) * (HALF * 2 - 120), z = (RR() - 0.5) * (HALF * 2 - 120);
+      if (x > LA.x0 - 80 && x < LA.x1 + 80 && z > LA.z0 - 80 && z < LA.z1 + 80) continue;
+      if (Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 60) continue;
+      if (!clear(x, z, 26)) continue;
+      if ((extra.stores || []).some((st) => Math.hypot(st.x - x, st.z - z) < 50)) continue;
+      const y = ground(x, z);
+      if (y < 2) continue;
+      // A cluster: one big rock or spire with a few smaller ones round its foot.
+      const tall = RR() < 0.55;
+      const size = 10 + RR() * 22;
+      const v = (tall ? spires : base)[Math.floor(RR() * base.length)];
+      big.add(v, x, y - size * 0.08, z, RR() * 6.28, size);
+      circle(x, z, size * 0.32);
+      for (let k = 0; k < 2 + Math.floor(RR() * 4); k++) {
+        const a = RR() * 6.28, d = size * (0.45 + RR() * 0.4), s2 = size * (0.15 + RR() * 0.3);
+        const bx = x + Math.cos(a) * d, bz = z + Math.sin(a) * d;
+        if (!clear(bx, bz, 4)) continue;
+        big.add(base[Math.floor(RR() * base.length)], bx, ground(bx, bz) - s2 * 0.1, bz, RR() * 6.28, s2);
+        if (s2 > 3) circle(bx, bz, s2 * 0.3);
+      }
+      placed++;
+    }
+  }
+
+  // ---------- Route 7 junction: a few blocks of tall buildings ----------
+  {
+    const kinds = ['bigBuilding', 'redBuilding', 'redCorner', 'officeA', 'officeB', 'tower', 'shop'];
+    const heightsOf = { bigBuilding: 22, redBuilding: 26, redCorner: 26, officeA: 34, officeB: 40, tower: 70, shop: 9 };
+    const blds = kinds.map((k) => model(k, { height: heightsOf[k] })).filter(Boolean);
+    const hwy = net.byId.hwy;
+    if (blds.length && hwy) {
+      // Along the first straight out of town, both sides, set back behind a frontage strip.
+      const RB2 = rng(6060);
+      for (let s0 = 120; s0 < 900; s0 += 34) {
+        const p = hwy.samples[Math.round(s0 / 3)];
+        for (const side of [1, -1]) {
+          for (const row of [0, 1]) {
+            const off = hwy.hw + (hwy.shoulder || 0) + 22 + row * 34 + RB2() * 6;
+            const x = p.x - p.tz * off * side, z = p.z + p.tx * off * side;
+            if (!clear(x, z, 14)) continue;
+            if ((extra.stores || []).some((st) => Math.hypot(st.x - x, st.z - z) < 30)) continue;
+            const v = blds[Math.floor(RB2() * blds.length)];
+            if (row === 0 && v.size.y > 45) continue; // the tallest stand back
+            const rot = Math.atan2(p.tz * side, -p.tx * side);
+            let lo = Infinity;
+            for (const [u, w] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) lo = Math.min(lo, ground(x + u * v.size.x / 2, z + w * v.size.z / 2));
+            big.add(v, x, lo - 0.3, z, rot);
+            box(x, z, v.size.x, v.size.z, rot);
+          }
+        }
+      }
+    }
   }
 
   group.add(props.build(), big.build());

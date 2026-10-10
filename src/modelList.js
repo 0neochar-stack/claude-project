@@ -20,6 +20,13 @@ export const MODEL_FILES = {
   pagoda: 'japan/pagoda_a.glb',
   pagodaB: 'japan/pagoda_b.glb',
   torii: 'japan/torii.glb',
+  bigBuilding: 'buildings/big_building.glb',
+  redBuilding: 'buildings/building_red.glb',
+  redCorner: 'buildings/building_red_corner.glb',
+  officeA: 'buildings/large_building_kenney_a.glb',
+  officeB: 'buildings/large_building_kenney_b.glb',
+  tower: 'buildings/skyscraper_kenney.glb',
+  shop: 'buildings/building_kay.glb',
   // street props
   hydrant: 'props/hydrant_b.glb',
   mailbox: 'props/mailbox_b.glb',
@@ -47,8 +54,10 @@ export const ANIMAL_CLIPS = ['Idle', 'Idle_2', 'Idle_Headlow', 'Idle_2_HeadLow',
 
 // Who made what, for the credits screen. CC0 models need no credit but get one anyway.
 export const MODEL_CREDITS = [
-  ['Trees, rocks, bushes, deer, stag, cow, bull, wolf, silo, traffic light, road barrier, gas tank, crate, soda cup, bottle, barn', 'Quaternius (CC0)'],
-  ['Box', 'Kay Lousberg (CC0)'],
+  ['Trees, rocks, bushes, brownstone, deer, stag, cow, bull, wolf, silo, traffic light, road barrier, gas tank, crate, soda cup, bottle, barn', 'Quaternius (CC0)'],
+  ['Box, corner shop', 'Kay Lousberg (CC0)'],
+  ['Office blocks, skyscraper', 'Kenney (CC0)'],
+  ['Red brick buildings', 'J-Toastie (CC-BY)'],
   ['Soda can', 'Kenney (CC0)'],
   ['Farm house, pagoda, curbside mailbox, fire hydrant, stop sign', 'Poly by Google (CC-BY)'],
   ['Pagoda (three-tier)', 'Poly by Google (CC-BY)'],

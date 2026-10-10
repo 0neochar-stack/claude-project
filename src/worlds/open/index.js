@@ -58,11 +58,11 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   const town = buildTown(net, heights, preset, assets);
   root.add(town.group);
   await progress(0.66, 'Planting palms, pines and cherry trees…');
-  const nature = buildNature(net, heights, preset, { yardTrees: town.yardTrees, sakuraSpots: town.sakuraSpots, rocks: water.rocks, assets, renderer });
+  const nature = buildNature(net, heights, preset, { yardTrees: town.yardTrees, sakuraSpots: town.sakuraSpots, rocks: water.rocks, assets, renderer, stores: town.storeSpots, terrainColors: terrain.colors });
   root.add(nature.group);
   const marks = buildLandmarks(net, heights);
   root.add(marks.group);
-  const decor = buildDecor(net, heights, assets, preset, { mailboxes: town.mailboxes, toriiSpot: town.toriiSpot, pagodaSpot: town.pagodaSpot });
+  const decor = buildDecor(net, heights, assets, preset, { mailboxes: town.mailboxes, stores: town.storeSpots, toriiSpot: town.toriiSpot, pagodaSpot: town.pagodaSpot });
   root.add(decor.group);
   await progress(0.8, 'Wiring the street lights…');
   const lamps = buildLamps(roads.lamps, town.lamps, preset, groundAt);
@@ -123,6 +123,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
     const m = st.night > 0.6 ? 'night' : st.sunE < 0.22 ? 'dusk' : 'day';
     if (m !== mood) { mood = m; env.carEnv = envs[m]; env.sceneEnv = envs[m]; env.moodChanged = true; }
     lamps.setNight(st.night);
+    nature?.setNight(st.night);
     town.setNight(st.night);
     water.setSun(sky.sunDir, st.night);
   }

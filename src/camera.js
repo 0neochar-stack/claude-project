@@ -118,7 +118,7 @@ export class CameraRig {
       up.set(0, 1, 0).applyQuaternion(view.body.getWorldQuaternion(new THREE.Quaternion()));
       cam.up.copy(up);
       cam.lookAt(v2);
-      cam.near = 0.05;
+      cam.near = 0.12; // as far out as the cabin allows: depth precision far away depends on it
       const fov = (id === 'cockpit' ? 74 : 66) + Math.min(car.speed * 3.6, 240) * 0.05;
       cam.fov += (fov - cam.fov) * Math.min(1, dt * 3);
       cam.updateProjectionMatrix();
@@ -126,7 +126,7 @@ export class CameraRig {
       return;
     }
     cam.up.set(0, 1, 0);
-    cam.near = 0.1;
+    cam.near = 0.3;
     // Swing toward the direction of travel so the car is framed side-on in a drift.
     const velYaw = car.speed > 3 ? Math.atan2(car.vx, car.vz) : car.h;
     let diff = Math.atan2(Math.sin(velYaw - car.h), Math.cos(velYaw - car.h));

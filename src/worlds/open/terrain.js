@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { HALF, CELL, N, fbm, smooth, LA, VILLAGE, PEAK } from './layout.js';
 
 const CHUNK = 125; // cells per chunk side (500 m)
-const LODS = [{ step: 1, dist: 0 }, { step: 4, dist: 520 }, { step: 10, dist: 1300 }];
+const LODS = [{ step: 1, dist: 0 }, { step: 2, dist: 380 }, { step: 4, dist: 800 }, { step: 10, dist: 1700 }];
 
 function detailTexture() {
   const S = 256;
@@ -123,7 +123,7 @@ export function buildTerrain(heights, preset) {
     group.add(lod);
     lods.push(lod);
   }
-  return { group, material: mat, lods };
+  return { group, material: mat, lods, colors };
 }
 
 // One chunk at a given step, with a skirt hanging 6 m down around its edge.
@@ -138,9 +138,18 @@ function chunkGeometry(heights, normals, colors, i0, j0, i1, j1, step) {
   const vCount = W * D + 2 * (W + D);
   const pos = new Float32Array(vCount * 3), nor = new Float32Array(vCount * 3), col = new Float32Array(vCount * 3);
   let v = 0;
+  // Coarse levels take the lowest point around each vertex (and sink a little more), so the
+  // simplified ground never rises through a road or a lot cut into it.
+  const win = step === 1 ? 0 : step === 2 ? 1 : step === 4 ? 2 : 4;
+  const sink = step === 1 ? 0 : step === 2 ? 0.15 : step === 4 ? 0.4 : 1.2;
+  const low = (i, j) => {
+    let h = heights[j * n + i];
+    for (let b = Math.max(0, j - win); b <= Math.min(N, j + win); b++) for (let a = Math.max(0, i - win); a <= Math.min(N, i + win); a++) h = Math.min(h, heights[b * n + a]);
+    return h - sink;
+  };
   const put = (i, j, drop) => {
     const k = j * n + i;
-    pos[v * 3] = -HALF + i * CELL; pos[v * 3 + 1] = heights[k] - drop; pos[v * 3 + 2] = -HALF + j * CELL;
+    pos[v * 3] = -HALF + i * CELL; pos[v * 3 + 1] = (win ? low(i, j) : heights[k]) - drop; pos[v * 3 + 2] = -HALF + j * CELL;
     nor.set(normals.subarray(k * 3, k * 3 + 3), v * 3);
     col.set(colors.subarray(k * 3, k * 3 + 3), v * 3);
     return v++;

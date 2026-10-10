@@ -605,6 +605,142 @@ export function buildTown(net, heights, preset, assets = new Map()) {
     lamps.push({ x: look.x1 - 4, y: look.y, z: look.z0 + 3, style: 'lot', nx: 0, nz: 1 });
   }
 
+  // ---------- roadside stores ----------
+  // Little shops, stands and motels along the highway, the coast road and the mountain roads, each with
+  // its own style, colours, sign and roof, so no two stretches look alike.
+  const storeSpots = [];
+  {
+    const RS = rng(5150);
+    const pick = (a) => a[Math.floor(RS() * a.length)];
+    const WALLS = [0xf2e6d0, 0xe8c9a0, 0xd4e4ec, 0xf0d0d8, 0xc8e0c0, 0xe0d4f0, 0xfff0b0, 0xd8b088, 0xa8c8e8, 0xf4f4f0, 0xc87a5a, 0x8aa0b8];
+    const TRIM = [0xc0302a, 0x2a5aa0, 0x2a8a5a, 0xd09a2a, 0x7a3aa0, 0x1a1a1c, 0xe86a2a, 0x2aa0a0];
+    const western = ['diner', 'liquor', 'taco', 'motel', 'auto', 'fruit', 'cafe'], japanese = ['konbini', 'ramen', 'shrine', 'tea'];
+    const store = (cx, cz, rot, style, japan) => {
+      const b = B(cx, cz);
+      const wall = pick(WALLS), trim = pick(TRIM);
+      const W = { diner: 16, liquor: 10, taco: 6, motel: 26, auto: 14, fruit: 8, cafe: 9, konbini: 12, ramen: 8, shrine: 6, tea: 9 }[style];
+      const D = { diner: 10, liquor: 9, taco: 4, motel: 8, auto: 11, fruit: 5, cafe: 8, konbini: 10, ramen: 7, shrine: 6, tea: 7 }[style];
+      const H = { diner: 4.2, liquor: 4.4, taco: 3, motel: 6.4, auto: 5.5, fruit: 2.8, cafe: 4, konbini: 4.2, ramen: 3.6, shrine: 3, tea: 3.6 }[style];
+      let g = Infinity;
+      for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 0]]) { const p = at(cx, cz, rot, (u * W) / 2, (v * D) / 2); g = Math.min(g, ground(p.x, p.z)); }
+      g -= 0.5;
+      const y = g + 0.5;
+      const front = at(cx, cz, rot, 0, D / 2 + 0.04);
+      // Body and a plinth.
+      b.box(cx, g - 0.3, cz, W + 0.6, 0.9, D + 0.6, rot, 'concrete', 0xb8b4ac);
+      const sideMat = japan ? (style === 'konbini' ? 'stucco' : 'boards') : pick(['stucco', 'stucco', 'siding', 'boards']);
+      b.box(cx, g, cz, W, H + 0.5, D, rot, { side: sideMat, top: 'gravel' }, japan && style !== 'konbini' ? 0x8a6a4a : wall);
+      // Roof: flat with a parapet, hip, or gable.
+      const roofKind = style === 'motel' || style === 'liquor' || style === 'konbini' || style === 'auto' ? 'flat' : japan ? 'hip' : pick(['flat', 'hip', 'gable']);
+      if (roofKind === 'flat') b.box(cx, y + H, cz, W + 0.2, 0.6, D + 0.2, rot, 'stucco', style === 'konbini' ? 0xffffff : trim);
+      else {
+        b.gableMat = sideMat;
+        b.roof(japan ? 'kawara' : pick(['terracotta', 'shingle']), cx, y + H, cz, W, D, rot, japan ? 1.4 : 1.8, 0.7, roofKind, japan ? 0xffffff : pick([0xffffff, 0xd0c0b0, 0x9a8a7a]));
+      }
+      // Front: glass, door, sign, awning, lights.
+      if (style === 'auto') {
+        for (const k of [-1, 1]) { const p = at(cx, cz, rot, k * W * 0.22, D / 2 + 0.04); b.decal('win', p.x, y + 1.7, p.z, W * 0.36, 3.4, rot, CELLS.roller); }
+      } else if (style === 'motel') {
+        for (let k = 0; k < 6; k++) for (const fl of [0, 1]) {
+          const p = at(cx, cz, rot, -W / 2 + 2.2 + k * 4.3, D / 2 + 0.04);
+          b.decal(fl && RS() < 0.5 ? 'winLit' : 'win', p.x, y + 1.1 + fl * 3.1, p.z, 0.9, 2.1, rot, CELLS.door);
+          b.decal(RS() < 0.4 ? 'winLit' : 'win', p.x + Math.cos(rot) * 1.6, y + 1.5 + fl * 3.1, p.z - Math.sin(rot) * 1.6, 1.6, 1.1, rot, CELLS.win2);
+        }
+        const bal = at(cx, cz, rot, 0, D / 2 + 0.8);
+        b.box(bal.x, y + 2.9, bal.z, W, 0.2, 1.6, rot, 'trim', trim);
+        b.box(bal.x, y + 3.1, bal.z + Math.cos(rot) * 0.75, W, 0.9, 0.06, rot, 'metal', 0x2a2a2a);
+      } else if (style === 'fruit' || style === 'taco' || style === 'shrine') {
+        b.decal(style === 'shrine' ? 'winLit' : 'winLit', front.x, y + 1.3, front.z, W - 1, 1.8, rot, style === 'shrine' ? CELLS.shoji : CELLS.shopfront);
+      } else {
+        b.decal('winLit', front.x, y + 1.5, front.z, W - 1.4, 2.8, rot, japan ? (style === 'konbini' ? CELLS.shopfront : CELLS.noren) : CELLS.shopfront);
+      }
+      if (style === 'konbini') { const st = at(cx, cz, rot, 0, D / 2 + 0.06); b.box(st.x, y + 3.2, st.z, W, 0.5, 0.08, rot, 'glow', pick([0x2a9a4a, 0x2a6ad0, 0xe04a2a])); }
+      if (style !== 'shrine') {
+        const sIdx = japan ? 12 + Math.floor(RS() * 3) : pick([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 15]);
+        const signIdx = style === 'motel' ? 10 : style === 'diner' ? 15 : style === 'taco' ? 0 : style === 'liquor' ? 3 : style === 'auto' ? 5 : sIdx;
+        const sy = roofKind === 'flat' ? y + H + 0.9 : y + H - 0.4;
+        const sg = at(cx, cz, rot, 0, D / 2 + 0.12);
+        signDecal(b, sg.x, sy, sg.z, Math.min(W - 1.5, 7), 1.2, rot, signIdx);
+      }
+      if (style !== 'motel' && style !== 'auto') {
+        const aw = at(cx, cz, rot, 0, D / 2 + 0.7);
+        b.box(aw.x, y + 2.75, aw.z, W - 0.6, 0.15, 1.4, rot, 'trim', pick(TRIM));
+      }
+      // A tall pole sign out by the road for the American places.
+      if (!japan && (style === 'diner' || style === 'motel' || style === 'liquor' || RS() < 0.35)) {
+        const ps = at(cx, cz, rot, W / 2 + 2, D / 2 + 5);
+        const gp = ground(ps.x, ps.z);
+        b.box(ps.x, gp, ps.z, 0.35, 7.5, 0.35, 0, 'metal', 0x50545a);
+        b.box(ps.x, gp + 7.5, ps.z, 3.6, 2.2, 0.5, rot, 'trim', trim);
+        signDecal(b, ps.x + Math.sin(rot) * 0.27, gp + 8.6, ps.z + Math.cos(rot) * 0.27, 3.3, 1.3, rot, style === 'motel' ? 10 : style === 'diner' ? 15 : pick([0, 1, 2, 3, 6, 8]));
+        circle(ps.x, ps.z, 0.3);
+      }
+      // Japanese touches: lanterns either side of the door, a vending machine.
+      if (japan) {
+        for (const k of [-1, 1]) {
+          const lp = at(cx, cz, rot, k * (W / 2 - 0.6), D / 2 + 0.35);
+          b.box(lp.x, y + 2.0, lp.z, 0.45, 0.6, 0.45, rot, 'glow', 0xff7040);
+        }
+      }
+      box(cx, cz, W, D, rot);
+      storeSpots.push({ x: cx, z: cz, rot, w: W, d: D, y, style, japan });
+    };
+    const roadside = [['hwy', 85, false], ['pch', 140, false], ['touge', 120, true], ['ridge', 160, true], ['vmain', 60, true]];
+    for (const [id, every, japan] of roadside) {
+      const r = net.byId[id];
+      if (!r) continue;
+      for (let s0 = 40; s0 < r.length - 40; s0 += every * (0.6 + RS() * 0.8)) {
+        const p = r.samples[Math.round(s0 / 3)];
+        const side = RS() < 0.5 ? 1 : -1;
+        const style = japan ? pick(japanese) : pick(western);
+        const D = 11, set = r.hw + (r.shoulder || r.gutter || r.sidewalk || 0) + 7 + D / 2;
+        const cx = p.x - p.tz * set * side, cz = p.z + p.tx * set * side;
+        // Inside Vista Del Mar the town already has its own shops.
+        if (cx > -1910 && cx < -630 && cz > -1650 && cz < -390) continue;
+        const rot = Math.atan2(-(-p.tz * side), -(p.tx * side)); // facing the road
+        let ok = true, lo = Infinity, hi = -Infinity;
+        for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 0], [0, 1], [0, -1]]) {
+          const q2 = at(cx, cz, rot, u * 14, v * 7);
+          if (!clearOfRoads(q2.x, q2.z, 1.5) || LOTS.some((l) => inLot(l, q2.x, q2.z, 6))) { ok = false; break; }
+          const h = ground(q2.x, q2.z); lo = Math.min(lo, h); hi = Math.max(hi, h);
+        }
+        if (!ok || hi - lo > 3 || lo < 0.8) continue;
+        if (storeSpots.some((o) => Math.hypot(o.x - cx, o.z - cz) < 40)) continue;
+        store(cx, cz, rot, style, japan);
+      }
+    }
+    // Billboards: big boards up on legs along the highway and the coast road, lit at night.
+    for (const [id, every] of [['hwy', 230], ['pch', 300], ['ridge', 420]]) {
+      const r = net.byId[id];
+      if (!r) continue;
+      for (let s0 = 80; s0 < r.length - 60; s0 += every * (0.7 + RS() * 0.6)) {
+        const p = r.samples[Math.round(s0 / 3)];
+        const side = RS() < 0.5 ? 1 : -1;
+        const off = r.hw + (r.shoulder || r.gutter || 0) + 9;
+        const cx = p.x - p.tz * off * side, cz = p.z + p.tx * off * side;
+        if (cx > -1910 && cx < -630 && cz > -1650 && cz < -390) continue;
+        if (!clearOfRoads(cx, cz, 3) || storeSpots.some((o) => Math.hypot(o.x - cx, o.z - cz) < 25)) continue;
+        // Angled a little toward oncoming traffic so it reads from down the road.
+        const rot = Math.atan2(p.tz * side, -p.tx * side) + side * 0.35;
+        const b = B(cx, cz);
+        const g = ground(cx, cz);
+        const W = 12, Hb = 4.8, up = 8 + RS() * 4;
+        for (const k of [-1, 1]) {
+          const leg = at(cx, cz, rot, k * W * 0.3, -0.4);
+          b.box(leg.x, ground(leg.x, leg.z) - 0.5, leg.z, 0.5, up + 0.5, 0.5, rot, 'metal', 0x5a5e66);
+          circle(leg.x, leg.z, 0.35);
+        }
+        b.box(cx, g + up, cz, W + 0.5, Hb + 0.5, 0.4, rot, 'trim', pick([0x1a1a1c, 0xe8e8e8, 0x2a2a3a]));
+        const f = at(cx, cz, rot, 0, 0.22);
+        signDecal(b, f.x, g + up + 0.25 + Hb / 2, f.z, W, Hb, rot, Math.floor(RS() * 16));
+        // Catwalk and lamps along the bottom edge.
+        const cw = at(cx, cz, rot, 0, 0.8);
+        b.box(cw.x, g + up - 0.15, cw.z, W, 0.12, 1.0, rot, 'metal', 0x6a6e76);
+        for (const k of [-1, 0, 1]) { const l = at(cx, cz, rot, k * W * 0.33, 1.1); b.box(l.x, g + up - 0.1, l.z, 0.3, 0.25, 0.3, rot, 'glow', 0xfff0d0); }
+      }
+    }
+  }
+
   // ---------- parked cars, merged ----------
   const carMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.45, roughness: 0.32 });
   const aoMat = new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, depthWrite: false, opacity: 0.7, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 });
@@ -669,6 +805,7 @@ export function buildTown(net, heights, preset, assets = new Map()) {
     yardTrees,
     sakuraSpots,
     mailboxes,
+    storeSpots,
     toriiSpot,
     pagodaSpot,
     lamps,
