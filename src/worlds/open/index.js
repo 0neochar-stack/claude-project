@@ -58,7 +58,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   const town = buildTown(net, heights, preset, assets);
   root.add(town.group);
   await progress(0.66, 'Planting palms, pines and cherry trees…');
-  const nature = buildNature(net, heights, preset, { yardTrees: town.yardTrees, sakuraSpots: town.sakuraSpots, rocks: water.rocks, assets });
+  const nature = buildNature(net, heights, preset, { yardTrees: town.yardTrees, sakuraSpots: town.sakuraSpots, rocks: water.rocks, assets, renderer });
   root.add(nature.group);
   const marks = buildLandmarks(net, heights);
   root.add(marks.group);
@@ -374,13 +374,13 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       sky.uniforms.uTime.value = t;
       sky.mesh.position.copy(camPos);
       wind = 0.5 + 0.5 * Math.sin(t * 0.21) * Math.sin(t * 0.13 + 2);
-      nature.update(t, dt, camPos, wind, particles);
+      nature.update(t, dt, camera, wind, particles);
       water.update(t, dt, camPos, car, particles, sound, ctx.hud);
       lamps.update(camPos);
       roads.update(camPos);
       town.update(t, camPos);
       marks.update(t, sky.state.night);
-      decor.update(t, dt, camPos, car);
+      decor.update(t, dt, camera, car);
       bins.update(dt);
       if (playing) {
         traffic.update(dt, car, camPos, sky.state.night);
@@ -393,6 +393,8 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       ctx.carView?.setLights(env.headlights);
       ctx.applyEnv();
     },
+    // Before each view is drawn (twice a frame in split screen): pick the instanced copies it can see.
+    render(r, s, cam) { nature.cull(cam); decor.cull(cam); },
     onBank(points) { police.onDrift(points, sky.state.night); },
     // Back on the road keeps any chase going; a fresh start clears everything.
     onReset(kind) { if (kind !== 'respawn') { police.reset(); traffic.reset?.(); } bins.reset(); },

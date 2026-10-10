@@ -21,8 +21,8 @@ export function buildDecor(net, heights, assets, preset, extra = {}) {
     if (!baked.has(key)) baked.set(key, assets.get(key) ? bakeStatic(assets.get(key), opts)[0] : null);
     return baked.get(key);
   };
-  const props = new Scatter({ tile: 200, far: Math.min(preset.far * 0.35, 420), shadows: preset.shadows > 0 });
-  const big = new Scatter({ tile: 400, far: Math.min(preset.far, 2400), shadows: preset.shadows > 0 });
+  const props = new Scatter({ tile: 48, far: Math.min(preset.far * 0.35, 420), shadows: preset.shadows > 0 });
+  const big = new Scatter({ tile: 128, far: Math.min(preset.far, 2400), shadows: preset.shadows > 0 });
   const circle = (x, z, r) => colliders.push({ type: 'circle', x, z, r });
   const box = (x, z, w, d, a, tall = true) => colliders.push({ type: 'box', x, z, hx: w / 2, hz: d / 2, a, tall });
   // Facing: models face +z; rot turns that toward (sin rot, cos rot).
@@ -292,9 +292,8 @@ export function buildDecor(net, heights, assets, preset, extra = {}) {
   }
 
   const tmp = new THREE.Vector3();
-  const update = (t, dt, cam, car) => {
-    props.update(cam);
-    big.update(cam);
+  const update = (t, dt, camera, car) => {
+    const cam = camera.position;
     for (const a of animals) {
       const o = a.object;
       const dc = Math.hypot(o.position.x - cam.x, o.position.z - cam.z);
@@ -341,6 +340,7 @@ export function buildDecor(net, heights, assets, preset, extra = {}) {
     void t; void tmp;
   };
 
-  return { group, colliders, update, animals, debug: { props, big, pasture } };
+  const cull = (camera) => { props.update(camera); big.update(camera); };
+  return { group, colliders, update, cull, animals, debug: { props, big, pasture } };
 }
 void BOULEVARD_Z;

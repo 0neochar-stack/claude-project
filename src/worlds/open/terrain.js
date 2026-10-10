@@ -52,7 +52,7 @@ const COL = {
 const tmp = new THREE.Color();
 
 // Ground colour at a point, from where it is and how steep.
-function groundColor(x, z, y, slope, out) {
+export function groundColor(x, z, y, slope, out) {
   const n = fbm(x * 0.02, z * 0.02, 2), n2 = fbm(x * 0.004 + 7, z * 0.004, 2);
   const dLA = Math.hypot(Math.max(LA.x0 - x, 0, x - LA.x1), Math.max(LA.z0 - z, 0, z - LA.z1));
   const dPeak = Math.hypot(x - PEAK.x, z - PEAK.z);

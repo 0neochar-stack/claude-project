@@ -13,6 +13,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { MODEL_FILES } from './modelList.js';
+import { InstanceField } from './instanceField.js';
 
 const cache = new Map();
 let loader = null;
@@ -151,58 +152,31 @@ export function bakeStatic(gltf, opts = {}) {
   return variants;
 }
 
-// Places many copies of baked variants, as instanced meshes per tile, with a draw distance.
+// Places many copies of baked variants through an InstanceField: only cells in view are drawn, within
+// the draw distance.
 export class Scatter {
-  constructor({ tile = 300, far = 600, shadows = true } = {}) {
-    this.tile = tile;
+  constructor({ tile = 64, far = 600, shadows = true } = {}) {
+    this.field = new InstanceField({ cell: tile, shadows });
     this.far = far;
-    this.shadows = shadows;
-    this.items = new Map(); // variant -> [{x, y, z, rot, s, shadow}]
-    this.group = new THREE.Group();
-    this.tiles = [];
+    this.ids = new Map(); // variant -> kind id
   }
 
   add(variant, x, y, z, rot = 0, s = 1) {
     if (!variant) return;
-    if (!this.items.has(variant)) this.items.set(variant, []);
-    this.items.get(variant).push({ x, y, z, rot, s });
-  }
-
-  build() {
-    const tiles = new Map();
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-    for (const [variant, list] of this.items) {
-      const byTile = new Map();
-      for (const it of list) {
-        const key = `${Math.floor(it.x / this.tile)},${Math.floor(it.z / this.tile)}`;
-        if (!byTile.has(key)) byTile.set(key, []);
-        byTile.get(key).push(it);
-      }
-      for (const [key, its] of byTile) {
-        let t = tiles.get(key);
-        if (!t) {
-          tiles.set(key, (t = { group: new THREE.Group(), x: 0, z: 0, n: 0 }));
-          this.group.add(t.group);
-        }
-        for (const it of its) { t.x += it.x; t.z += it.z; t.n++; }
-        for (const part of variant.parts) {
-          const im = new THREE.InstancedMesh(part.geometry, part.material, its.length);
-          its.forEach((it, i) => im.setMatrixAt(i, m4.compose(p.set(it.x, it.y, it.z), q.setFromAxisAngle(up, it.rot), sc.setScalar(it.s))));
-          im.computeBoundingSphere();
-          im.castShadow = this.shadows;
-          im.receiveShadow = true;
-          t.group.add(im);
-        }
-      }
+    let id = this.ids.get(variant);
+    if (!id) {
+      id = `v${this.ids.size}`;
+      this.ids.set(variant, id);
+      // Small things drop out sooner than big ones.
+      const dist = Math.min(this.far, Math.max(90, variant.size.y * 60));
+      this.field.addKind(id, { lods: [{ parts: variant.parts.map((p) => [p.geometry, p.material]), dist }], height: variant.size.y, shadow: variant.size.y > 1.2 });
     }
-    this.tiles = [...tiles.values()].map((t) => ({ group: t.group, x: t.x / t.n, z: t.z / t.n }));
-    return this.group;
+    this.field.add(id, x, y, z, rot, s);
   }
 
-  update(cam) {
-    const r = this.far + this.tile * 0.7;
-    for (const t of this.tiles) t.group.visible = Math.abs(t.x - cam.x) < r && Math.abs(t.z - cam.z) < r;
-  }
+  build() { return this.field.build(); }
+
+  update(camera) { this.field.update(camera); }
 }
 
 // An animated animal: a skinned clone scaled to height, with its own mixer and clips by name.
