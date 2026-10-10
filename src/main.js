@@ -40,10 +40,17 @@ let preset = settings.preset;
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap; // the soft variant costs several times more per pixel
 renderer.info.autoReset = false; // counted per frame across all passes
+// What graphics chip this is, so "auto" quality can start lower on integrated graphics.
+{
+  const gl = renderer.getContext();
+  const ext = gl.getExtension('WEBGL_debug_renderer_info');
+  settings.gpu = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+  preset = settings.preset;
+}
 // Resolution: the preset's pixel ratio, or supersampled for a 4K-sharp image on strong GPUs. "Auto" drops it
-// a little when the frame rate sags and climbs back when it recovers; it never goes soft enough to look pixelated.
+// when the frame rate sags and climbs back when it recovers.
 const targetRatio = () => (settings.resolution === 'supersample' ? Math.min(3, (devicePixelRatio || 1) * 1.5) : Math.min(devicePixelRatio || 1, preset.pixelRatio));
 let pixelRatio = targetRatio();
 const MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
@@ -183,16 +190,17 @@ const activeWorld = () => (state === 'drive' || state === 'pause' || state === '
 // ---------- world environment ----------
 function applyEnv(w) {
   const env = w.env;
+  w.setLoad?.(GOVERN_LOAD[govern.level]);
   scene.background = env.background;
   scene.fog = env.fog;
   scene.environment = env.sceneEnv || null;
   renderer.toneMappingExposure = env.exposure;
-  bloom.enabled = preset.bloom && !!env.bloom;
+  bloom.enabled = preset.bloom && !!env.bloom && govern.level < 3;
   // Glow is kept subtle: half of what each world asks for.
   if (env.bloom) { bloom.strength = env.bloom.strength * 0.5; bloom.radius = env.bloom.radius; bloom.threshold = env.bloom.threshold; }
   const far = Math.min(env.far, preset.far);
   if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
-  renderer.shadowMap.enabled = !!(preset.shadows && env.shadows);
+  renderer.shadowMap.enabled = !!(preset.shadows && env.shadows) && govern.level < 2;
 }
 
 function setWorldVisible() {
@@ -794,6 +802,19 @@ function updateHud2() {
   e('p2-join').hidden = input.slots[1] !== null;
 }
 
+// ---------- frame-rate governor ----------
+// Levels: 0 full, 1 lighter grass and shorter detail ranges, 2 also no shadows, 3 also no glow and no grass.
+const govern = { level: 0, slow: 0, fast: 0 };
+const GOVERN_LOAD = [1, 0.7, 0.5, 0.35];
+function applyGovern() {
+  if (world) applyEnv(world);
+}
+function governDetail(fps, resAtFloor) {
+  if (fps < 32 && resAtFloor) { govern.slow++; govern.fast = 0; } else if (fps > 55) { govern.fast++; govern.slow = 0; } else { govern.slow = 0; govern.fast = 0; }
+  if (govern.slow >= 2 && govern.level < 3) { govern.level++; govern.slow = 0; applyGovern(); }
+  else if (govern.fast >= 6 && govern.level > 0) { govern.level--; govern.fast = 0; applyGovern(); }
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - prev) / 1000);
@@ -875,7 +896,7 @@ function frame(now) {
     const w = innerWidth, h = innerHeight;
     renderer.setScissorTest(true);
     for (const [cam, y] of [[camera, h / 2], [camera2, 0]]) {
-      world.render?.(renderer, scene, cam, frameNo);
+      world.render?.(renderer, scene, cam, frameNo, [camera, camera2]);
       renderer.setViewport(0, y, w, h / 2);
       renderer.setScissor(0, y, w, h / 2);
       renderer.render(scene, cam);
@@ -887,17 +908,26 @@ function frame(now) {
     composer.render();
   }
 
-  // Resolution follows the frame rate: drop when the device cannot keep up, recover when it can.
+  // Resolution follows the frame rate: drop when the device cannot keep up, recover when it can. Once the
+  // resolution is as low as it goes, detail goes next (grass, detail ranges, shadows, glow), in steps.
   perfTime += dt;
   perfFrames++;
   if (perfTime > 2) {
     const fps = perfFrames / perfTime;
     fpsShown = fps;
-    const top = targetRatio(), floor = Math.max(0.85, top * 0.65);
-    if (settings.resolution === 'auto') {
-      if (fps < 40 && pixelRatio > floor) { pixelRatio = Math.max(floor, pixelRatio - 0.1); resize(); }
-      else if (fps > 57 && pixelRatio < top) { pixelRatio = Math.min(top, pixelRatio + 0.1); resize(); }
-    } else if (pixelRatio !== top) { pixelRatio = top; resize(); }
+    const top = targetRatio(), floor = Math.max(0.6, Math.min(top, devicePixelRatio || 1) * 0.55);
+    // "Auto" keeps it near 60. Native and supersample hold their resolution unless the game is really
+    // struggling (under ~24 fps), then they give way too rather than stay unplayable.
+    const auto = settings.resolution === 'auto';
+    const struggling = fps < 24;
+    if ((auto && fps < 40) || struggling) {
+      if (pixelRatio > floor) {
+        pixelRatio = Math.max(floor, pixelRatio - (struggling ? 0.25 : 0.15));
+        resize();
+        if (struggling && !govern.warned && driving) { govern.warned = true; hud.toast('Running slow · lowering resolution and detail'); }
+      }
+    } else if (fps > 57 && pixelRatio < top && govern.level === 0) { pixelRatio = Math.min(top, pixelRatio + 0.1); resize(); }
+    if (inWorld && driving && !window.__cdNoGovern) governDetail(fps, pixelRatio <= floor + 1e-3 || !auto);
     perfTime = 0;
     perfFrames = 0;
   }

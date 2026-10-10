@@ -8,7 +8,7 @@
 // Shadows: only the nearest level casts them, so far copies never go through the shadow pass.
 import * as THREE from 'three';
 
-const _frustum = new THREE.Frustum(), _m = new THREE.Matrix4(), _box = new THREE.Box3(), _v = new THREE.Vector3();
+const _frusta = [], _dir = new THREE.Vector3(), _m = new THREE.Matrix4(), _box = new THREE.Box3(), _v = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 
 export class InstanceField {
@@ -20,8 +20,9 @@ export class InstanceField {
     this.group = new THREE.Group();
     this.group.name = 'instance-field';
     this.cells = [];
-    this.stamp = '';
+    this.stamp = -1;
     this.enabled = true;
+    this.lodScale = 1;
   }
 
   // lods: [{ parts: [[geometry, material]], dist }], nearest first; past the last dist the kind isn't drawn.
@@ -98,33 +99,53 @@ export class InstanceField {
 
   // camera: the view camera. Picks the visible cells and their levels, and refills the meshes when that
   // choice changes.
+  // camera: one camera, or several (split screen) - a cell is drawn if any of them sees it, at the
+  // detail the nearest one needs.
   update(camera) {
     if (!this.enabled) return;
-    camera.updateMatrixWorld();
-    _m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    _frustum.setFromProjectionMatrix(_m);
-    const cx = camera.position.x, cz = camera.position.z, C = this.cellSize;
+    const cams = Array.isArray(camera) ? camera : [camera];
+    // Only re-pick when a camera has moved 3 m or turned 2 degrees (cells are padded to cover the gap).
+    const last = (this.lastCams ||= []);
+    let same = last.length === cams.length && this.lastScale === this.lodScale;
+    cams.forEach((cam, i) => {
+      cam.getWorldDirection(_dir);
+      const l = (last[i] ||= { p: new THREE.Vector3(1e9, 0, 0), d: new THREE.Vector3() });
+      if (l.p.distanceToSquared(cam.position) > 9 || l.d.dot(_dir) < 0.9994) same = false;
+    });
+    if (same) return;
+    last.length = cams.length;
+    cams.forEach((cam, i) => { last[i].p.copy(cam.position); cam.getWorldDirection(last[i].d); });
+    this.lastScale = this.lodScale;
+    const frusta = cams.map((cam, i) => {
+      cam.updateMatrixWorld();
+      _m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      return (_frusta[i] ||= new THREE.Frustum()).setFromProjectionMatrix(_m);
+    });
+    const C = this.cellSize;
+    const ls = this.lodScale; // detail ranges shrink when the frame rate needs it
     const half = C * 0.7071;
     const pick = [];
-    let stamp = '';
+    // A running hash of which cells were picked at which level: unchanged means nothing to refill.
+    let stamp = 0;
     for (let ci = 0; ci < this.cells.length; ci++) {
       const c = this.cells[ci];
       const mx = c.x0 + C / 2, mz = c.z0 + C / 2;
-      const d = Math.max(0, Math.hypot(mx - cx, mz - cz) - half);
+      let d = Infinity;
+      for (const cam of cams) d = Math.min(d, Math.max(0, Math.hypot(mx - cam.position.x, mz - cam.position.z) - half));
       let inView = null; // tested lazily
       for (const s of c.slots) {
         const lods = s.kind.lods;
-        if (d > lods[lods.length - 1].dist) continue;
+        if (d > lods[lods.length - 1].dist * (lods.length > 1 ? 1 : ls)) continue;
         if (inView === null) {
-          _box.min.set(c.x0 - s.pad, c.y0 - 2, c.z0 - s.pad);
-          _box.max.set(c.x0 + C + s.pad, c.y1 + 2, c.z0 + C + s.pad);
-          inView = _frustum.intersectsBox(_box);
+          _box.min.set(c.x0 - s.pad - 6, c.y0 - 4, c.z0 - s.pad - 6);
+          _box.max.set(c.x0 + C + s.pad + 6, c.y1 + 4, c.z0 + C + s.pad + 6);
+          inView = frusta.some((f) => f.intersectsBox(_box));
         }
         if (!inView) continue;
         let lod = 0;
-        while (d > lods[lod].dist) lod++;
+        while (lod < lods.length - 1 && d > lods[lod].dist * ls) lod++;
         pick.push(s, lod);
-        stamp += `${ci}:${lod},`;
+        stamp = (Math.imul(stamp, 31) + ci * 8 + lod + 1) | 0;
       }
     }
     if (stamp === this.stamp) return;

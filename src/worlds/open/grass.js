@@ -9,8 +9,8 @@ import { HALF, N, CELL, LA, VILLAGE, inLot } from './layout.js';
 // net: road network; heights: the baked grid; colors: terrain colours per grid node (Float32 rgb);
 // stores: roadside store footprints; preset: graphics preset.
 export function buildGrass(net, heights, colors, stores, preset, windUniforms) {
-  const counts = { 0: 0, 1: 20000, 2: 46000 };
-  const radius = { 0: 0, 1: 38, 2: 50 };
+  const counts = { 0: 0, 1: 10000, 2: 24000 };
+  const radius = { 0: 0, 1: 30, 2: 40 };
   const detail = preset.detail ?? 2;
   const count = counts[detail], R = radius[detail];
   if (!count) return null;
@@ -68,7 +68,7 @@ export function buildGrass(net, heights, colors, stores, preset, windUniforms) {
   void inLot; void CELL;
 
   // A clump: six single-triangle blades, dark at the root and pale at the tip.
-  const blades = 9, pos = [], col = [], nor = [];
+  const blades = 7, pos = [], col = [], nor = [];
   let seed = 7;
   const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
   for (let b = 0; b < blades; b++) {
@@ -151,6 +151,12 @@ export function buildGrass(net, heights, colors, stores, preset, windUniforms) {
   mesh.receiveShadow = false;
   return {
     mesh,
+    // Thins the field out (0..1) when the frame rate needs it: fewer clumps over a smaller patch.
+    setScale(f) {
+      geo.instanceCount = Math.round(count * f * f);
+      uniforms.uR.value = R * Math.max(0.4, f);
+      mesh.visible = f > 0.05;
+    },
     update(cam) { uniforms.uCam.value.copy(cam); },
   };
 }

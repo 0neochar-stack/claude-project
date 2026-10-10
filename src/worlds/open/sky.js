@@ -90,7 +90,9 @@ export class Sky {
     });
     this.mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), mat);
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = -10;
+    // Drawn after everything solid: the dome sits on the far plane, so only the pixels nothing else
+    // covered get the (fairly expensive) sky shader.
+    this.mesh.renderOrder = 1000;
 
     this.sun = new THREE.DirectionalLight(0xffffff, 2);
     this.sunTarget = this.sun.target;

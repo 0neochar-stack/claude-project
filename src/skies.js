@@ -43,7 +43,7 @@ export const SKY_GLSL_FUNCS = /* glsl */ `
     return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y),
                mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z);
   }
-  float fbm3(vec3 p) { float s = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { s += a * n3(p); p *= 2.07; a *= 0.5; } return s; }
+  float fbm3(vec3 p) { float s = 0.0, a = 0.5; for (int i = 0; i < 3; i++) { s += a * n3(p); p *= 2.07; a *= 0.5; } return s * 1.14; }
   // A planet seen at infinity: centred on direction pc with angular radius ar, lit from sun, banded
   // along axis ax, with rings in the plane normal to ax between r0 and r1 planet radii (0 for none).
   vec4 planet(vec3 d, vec3 pc, float ar, vec3 sun, vec3 ax, vec3 cA, vec3 cB, float bandF, float r0, float r1) {

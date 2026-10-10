@@ -6,6 +6,9 @@ import { dirname } from 'node:path';
 import { ANIMAL_CLIPS, MODEL_FILES } from './src/modelList.js';
 import { optimizeModel } from './tools/optimize-models.mjs';
 
+// Models drawn by the thousand are simplified to this fraction of their triangles.
+const SIMPLIFY = { 'nature/trees.glb': 0.2, 'nature/bushes.glb': 0.5, 'nature/bush.glb': 0.5 };
+
 mkdirSync('dist', { recursive: true });
 await build({
   entryPoints: ['src/main.js'],
@@ -27,7 +30,7 @@ for (const file of new Set(Object.values(MODEL_FILES))) {
   const src = `models/${file}`, dst = `dist/models/${file}`;
   if (!existsSync(dst) || statSync(dst).mtimeMs < statSync(src).mtimeMs) {
     mkdirSync(dirname(dst), { recursive: true });
-    await optimizeModel(src, dst, file.startsWith('animals/') ? ANIMAL_CLIPS : undefined);
+    await optimizeModel(src, dst, file.startsWith('animals/') ? ANIMAL_CLIPS : undefined, SIMPLIFY[file]);
   }
   // Artifact hosting only serves web types, so the game fetches each model as base64 text.
   writeFileSync(`${dst}.txt`, readFileSync(dst).toString('base64'));

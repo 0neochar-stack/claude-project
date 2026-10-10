@@ -498,13 +498,13 @@ export function buildNature(net, heights, preset, extra = {}) {
   const hide = Math.min(preset.far * 0.7, 2200);
   const cards = (m) => (extra.renderer ? impostor(extra.renderer, m.near) : m.far || m.near);
   const plan = {
-    palm: (m) => [{ parts: m.near, dist: 150 * k }, { parts: m.far, dist: 420 * k }, { parts: cards(m), dist: hide }],
-    sakura: (m) => [{ parts: m.near, dist: 140 * k }, { parts: cards(m), dist: hide * 0.7 }],
-    cedar: (m) => [{ parts: m.near, dist: 110 * k }, { parts: m.far, dist: 380 * k }, { parts: cards(m), dist: hide }],
-    oak: (m) => [{ parts: m.near, dist: 110 * k }, { parts: cards(m), dist: hide }],
-    rock: (m) => [{ parts: m.near, dist: 320 * k }],
-    bush: (m) => [{ parts: m.near, dist: 80 * k }, { parts: cards(m), dist: 260 * k }],
-    maple: (m) => [{ parts: m.near, dist: 90 * k }, { parts: cards(m), dist: 320 * k }],
+    palm: (m) => [{ parts: m.near, dist: 90 * k }, { parts: m.far, dist: 360 * k }, { parts: cards(m), dist: hide }],
+    sakura: (m) => [{ parts: m.near, dist: 80 * k }, { parts: cards(m), dist: hide * 0.7 }],
+    cedar: (m) => [{ parts: m.near, dist: 70 * k }, { parts: m.far, dist: 300 * k }, { parts: cards(m), dist: hide }],
+    oak: (m) => [{ parts: m.near, dist: 55 * k }, { parts: cards(m), dist: hide }],
+    rock: (m) => [{ parts: m.near, dist: 260 * k }],
+    bush: (m) => [{ parts: m.near, dist: 40 * k }, { parts: cards(m), dist: 200 * k }],
+    maple: (m) => [{ parts: m.near, dist: 50 * k }, { parts: cards(m), dist: 260 * k }],
     grass: (m) => [{ parts: m.near, dist: 60 * k }],
   };
   const height = { palm: 18, sakura: 7, cedar: 24, oak: 10, rock: 2, bush: 2, maple: 2.5, grass: 0.8 };
@@ -591,7 +591,9 @@ export function buildNature(net, heights, preset, extra = {}) {
       for (const k of field.kinds.values()) for (const l of k.lods) for (const [, m] of l.parts) if (m.userData.impostor) m.emissiveIntensity = 0.35 * (1 - n);
     },
     // Picks what to draw for a camera; called before each view is rendered.
-    cull(camera) { field.update(camera); grass?.update(camera.position); },
+    cull(camera) { field.update(camera); grass?.update((Array.isArray(camera) ? camera[0] : camera).position); },
+    // Load shedding (1 = full): shorter detail ranges and thinner grass.
+    setLoad(f) { field.lodScale = Math.max(0.35, f); grass?.setScale(f); },
     // camera: the view camera (its position drives the petals).
     update(t, dt, camera, windLevel, particles) {
       const cam = camera.position;

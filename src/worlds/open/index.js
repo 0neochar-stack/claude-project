@@ -323,6 +323,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   })();
 
   let wind = 0;
+  let lastCull = -1;
   const camPos = new THREE.Vector3();
   const world = {
     id: 'open',
@@ -398,7 +399,13 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       ctx.applyEnv();
     },
     // Before each view is drawn (twice a frame in split screen): pick the instanced copies it can see.
-    render(r, s, cam) { nature.cull(cam); decor.cull(cam); },
+    render(r, s, cam, frame, cams) {
+      // Split screen draws twice a frame: cull once for both views, so the instance lists don't flip.
+      if (cams) { if (frame === lastCull) return; lastCull = frame; nature.cull(cams); decor.cull(cams); return; }
+      nature.cull(cam); decor.cull(cam);
+    },
+    // Frame-rate governor (main.js): 1 is full detail, lower sheds grass and shortens detail ranges.
+    setLoad(f) { nature.setLoad(f); decor.setLoad(f); },
     // Lester on the phone: any chase is dropped and the heat wiped. True if there was anything to lose.
     setSky(id) { sky.setTheme(id); env.moodChanged = true; },
     callOffPolice() {
