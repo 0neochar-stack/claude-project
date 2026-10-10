@@ -851,7 +851,7 @@ function frame(now) {
   }
   const inWorld = (driving || state === 'pause') && world;
   if (inWorld) {
-    world.update(clock, dt, { camera, car, playing: driving, carView, hud, score, profile, sound, scene, renderer, applyEnv: () => applyEnv(world) });
+    world.update(clock, dt, { camera, car, playing: driving, carView, hud, score, profile, sound, scene, renderer, skids, applyEnv: () => applyEnv(world) });
     particles.update(dt);
     skids.update(clock);
     // Free look: right stick per player, plus the mouse for player one.

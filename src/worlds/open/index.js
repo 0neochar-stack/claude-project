@@ -14,6 +14,7 @@ import { Police } from './police.js';
 import { Knockables } from './knockables.js';
 import { buildLandmarks } from './landmarks.js';
 import { buildDecor } from './decor.js';
+import { JohnDoe } from './johndoe.js';
 import { disposeTree } from '../util.js';
 import { loadModels } from '../../models.js';
 import { MODEL_FILES } from '../../modelList.js';
@@ -96,6 +97,10 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
     dusk: skyEnvironment(renderer, 0x2f3c8c, 0xff8a50, 0x2a2022, 0xff9a50, new THREE.Vector3(-0.9, 0.12, -0.3)),
     night: skyEnvironment(renderer, 0x050816, 0x1a2348, 0x08080c, 0x4060a0, new THREE.Vector3(-0.4, 0.45, -0.8)),
   };
+
+  // John Doe, the legend, somewhere near you at all times.
+  const johnDoe = new JohnDoe(net, groundAt, envs.dusk, true);
+  root.add(johnDoe.root);
 
   const env = {
     background: sky.background,
@@ -229,7 +234,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
   function collide(car) {
     let impact = collideStatic(car);
     // Traffic, police and bins.
-    impact = Math.max(impact, traffic.collide(car), police.collide(car));
+    impact = Math.max(impact, traffic.collide(car), police.collide(car), johnDoe.collide(car));
     bins.hit(car, sound);
     return impact;
   }
@@ -360,6 +365,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       g.drawImage(mapImg, 0, 0);
       g.setTransform(1, 0, 0, 1, 0, 0);
       police.drawMinimap(g, car, W, s / MAP_PX);
+      johnDoe.drawMinimap(g, car, W, s / MAP_PX);
     },
     placeInfo,
     get hours() { return hours; },
@@ -389,12 +395,14 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       bins.update(dt);
       if (playing) {
         traffic.update(dt, car, camPos, sky.state.night);
+        johnDoe.update(dt, car, camPos, traffic, { skids: ctx.skids, particles, clock: t, rate: preset.particles / 25 });
         police.update(dt, car, ctx, sky.state.night, (c) => { collideStatic(c); surface(c); });
       }
       // Ambience: wind in the mountains, the waterfall's roar, and the siren when the police are close.
       const nearMountain = 1 - smooth(500, 1000, Math.hypot(car.x - PEAK.x, car.z - PEAK.z));
       sound.setAmbience({ wind: 0.3 + nearMountain * 0.7 * wind, water: water.loudness(car), siren: police.sirenLevel(car) });
-      if (env.moodChanged) { env.moodChanged = false; ctx.carView?.setEnvMap(env.carEnv); }
+      if (env.moodChanged) { env.moodChanged = false; ctx.carView?.setEnvMap(env.carEnv); johnDoe.setEnvMap(env.carEnv); }
+      johnDoe.setLights(env.headlights);
       ctx.carView?.setLights(env.headlights);
       ctx.applyEnv();
     },
@@ -421,7 +429,7 @@ export async function createOpenWorld({ preset, sound, particles, settings, rend
       disposeTree(root);
       for (const e of Object.values(envs)) e.dispose();
     },
-    debug: { decor, assets, colliders, net, heights, roads, town, nature, water, traffic, police, sky },
+    debug: { johnDoe, decor, assets, colliders, net, heights, roads, town, nature, water, traffic, police, sky },
   };
   void CELL;
   await progress(1, 'Ready');
