@@ -790,6 +790,8 @@ function updateHud2() {
   e('p2-units').textContent = mph ? 'mph' : 'km/h';
   e('p2-gear').textContent = c.gear === -1 ? 'R' : String(c.gear);
   e('p2-total').textContent = fmt.format(Math.round(sc.total));
+  // Until a second controller has taken the seat, tell player two how to join.
+  e('p2-join').hidden = input.slots[1] !== null;
 }
 
 function frame(now) {

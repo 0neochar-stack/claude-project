@@ -296,6 +296,9 @@ body.is-split .hud:not(.hud2) .boost { bottom: calc(184px + var(--safe-b)); widt
 body.is-split .hud:not(.hud2) .scorebox { display: none; }
 body.is-split::after { content: ""; position: fixed; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1px; background: var(--bg); z-index: 6; pointer-events: none; }
 .hud2 { top: 50%; }
+.p2join { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); padding: 14px 22px; border-radius: 10px; background: rgba(6, 5, 11, 0.82); border: 1px solid var(--pink); font: 700 15px/1.3 var(--display); letter-spacing: 0.1em; text-transform: uppercase; text-align: center; animation: p2pulse 1.4s ease-in-out infinite; }
+.p2join b { color: var(--pink); }
+@keyframes p2pulse { 50% { opacity: 0.55; } }
 .p2tag { position: absolute; top: 12px; left: 16px; font: italic 800 22px/1 var(--display); color: var(--pink); text-shadow: 0 0 12px rgba(255, 63, 164, 0.6); }
 .hud2 .chain { top: 12px; }
 .p2dash { position: absolute; right: 18px; bottom: 16px; display: grid; justify-items: end; gap: 2px; padding: 10px 14px; background: var(--glass); border: 1px solid var(--line); border-radius: 8px; }
@@ -517,6 +520,7 @@ body.is-touch .scorebox { display: none; }
 </div>
 <div class="hud hud2" id="hud2" hidden>
   <div class="p2tag">P2</div>
+  <div class="p2join" id="p2-join" hidden>Player 2 · press <b>A</b> or <b>Start</b> on your controller to join</div>
   <div class="chain is-idle" id="p2-chain">
     <div class="chain__grade" id="p2-grade">DRIFT</div>
     <div class="chain__pts" id="p2-points">0</div>

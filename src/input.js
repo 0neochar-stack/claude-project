@@ -99,12 +99,9 @@ export class Input {
     }
     const live = pads.filter((p) => p && p.connected);
     this.padOrder = live.map((p) => p.index);
+    this.seat(live);
     for (const pad of live) {
-      let st = this.padState.get(pad.index);
-      if (!st || st.id !== pad.id) {
-        st = { id: pad.id, rest: pad.axes.slice(), live: new Set(), prev: [], analog: { throttle: 0, brake: 0, steer: 0, handbrake: false, clutch: false }, look: { x: 0, y: 0 } };
-        this.padState.set(pad.index, st);
-      }
+      const st = this.stateFor(pad);
       pad.axes.forEach((v, i) => { if (Math.abs(v - st.rest[i]) > 0.25) st.live.add(i); });
       const axis = (i) => (st.live.has(i) ? pad.axes[i] || 0 : 0);
       const btn = (i) => {
@@ -145,17 +142,6 @@ export class Input {
       st.look.x = rs(pad.mapping === 'standard' ? 2 : 3); st.look.y = rs(pad.mapping === 'standard' ? 3 : 4);
       if (Math.abs(steer) > 0 || gas > 0.05 || brake > 0.05 || btn(0) > 0.5) this.lastPad = pad;
 
-      // Seats: the first pad to do anything is player one; a different pad pressing A or Start joins as
-      // player two. A pad that only ever mirrors player one's buttons (the same controller listed twice)
-      // or never does anything (a phantom device) never gets a seat.
-      const pressedKey = pad.buttons.map((b, i) => (btn(i) > 0.5 ? i : '')).join(',').replace(/,+/g, ',');
-      const active = /\d/.test(pressedKey) || Math.abs(axis(0)) > 0.5 || gas > 0.3;
-      if (this.slots[0] === null && active) this.slots[0] = pad.index;
-      if (this.slots[1] === null && pad.index !== this.slots[0] && this.slots[0] !== null && (btn(0) > 0.5 || btn(9) > 0.5) && !st.prev[0] && !st.prev[9]) {
-        const p1 = this.padState.get(this.slots[0]);
-        if (!p1 || p1.pressedKey !== pressedKey) { this.slots[1] = pad.index; this.onJoin?.(pad.id); }
-      }
-      st.pressedKey = pressedKey;
       const isP1 = pad.index === this.slots[0], isP2 = pad.index === this.slots[1];
       // In split screen only seated pads drive; player two's buttons go to their own queue.
       if (this.split && !this.menuMode && !isP1 && !isP2) { for (let i = 0; i < pad.buttons.length; i++) st.prev[i] = btn(i) > 0.5; continue; }
@@ -196,6 +182,69 @@ export class Input {
       s.handbrake = s.handbrake || an.handbrake;
       s.clutch = s.clutch || an.clutch;
     }
+  }
+
+  stateFor(pad) {
+    let st = this.padState.get(pad.index);
+    if (!st || st.id !== pad.id) {
+      st = { id: pad.id, rest: pad.axes.slice(), live: new Set(), prev: [], analog: { throttle: 0, brake: 0, steer: 0, handbrake: false, clutch: false }, look: { x: 0, y: 0 } };
+      this.padState.set(pad.index, st);
+    }
+    return st;
+  }
+
+  // Seats, decided with every pad's buttons from the same poll in view.
+  // Player one: the first pad to do anything. Player two: a different pad pressing A or Start.
+  // Some systems list one physical controller twice (XInput and DirectInput); such a copy presses exactly
+  // what player one presses, so it is spotted and never seated, and if it ever grabbed seat two it is
+  // dropped. Seat two also passes to any other pad pressing A or Start once its holder has sat idle.
+  seat(live) {
+    const now = performance.now();
+    const info = new Map();
+    for (const pad of live) {
+      const btn = (i) => { const b = pad.buttons[i]; return b ? (typeof b === 'number' ? b : Math.max(b.value || 0, b.pressed ? 1 : 0)) : 0; };
+      const st = this.stateFor(pad);
+      const key = pad.buttons.map((b, i) => (btn(i) > 0.5 ? i : '')).join(',').replace(/,+/g, ',').replace(/^,|,$/g, '');
+      const stick = Math.abs(pad.axes[0] || 0) > 0.5 && st.live?.has(0);
+      const join = (btn(0) > 0.5 && !st.seatPrevA) || (btn(9) > 0.5 && !st.seatPrevStart);
+      // Everything the pad reports, so a copy of another pad (identical in every button and axis) shows.
+      const sig = key + '|' + pad.axes.map((v) => Math.round((v || 0) * 20)).join(',');
+      const changed = sig !== st.sig;
+      st.sig = sig;
+      info.set(pad.index, { pad, st, key, sig, changed, active: key !== '' || stick, join, a: btn(0) > 0.5, start: btn(9) > 0.5 });
+    }
+    // Free seats whose pad went away.
+    this.slots = this.slots.map((i) => (i !== null && !info.has(i) ? null : i));
+    const p1 = this.slots[0] !== null ? info.get(this.slots[0]) : null;
+    for (const [idx, f] of info) {
+      const st = f.st;
+      st.mirror ??= 0;
+      // A copy changes in the same poll as player one, to the same state, every time.
+      if (p1 && idx !== this.slots[0] && (f.changed || p1.changed)) st.mirror = f.changed && p1.changed && f.sig === p1.sig ? Math.min(6, st.mirror + 1) : Math.max(0, st.mirror - 2);
+      if (f.active) st.lastActive = now;
+    }
+    const mirrorOfP1 = (idx) => (this.padState.get(idx)?.mirror || 0) >= 3;
+    if (this.slots[0] === null) {
+      for (const [idx, f] of info) if (f.active && !mirrorOfP1(idx)) { this.slots[0] = idx; break; }
+    }
+    // A seated copy of player one loses seat two.
+    if (this.slots[1] !== null && mirrorOfP1(this.slots[1])) this.slots[1] = null;
+    const holder = this.slots[1] !== null ? this.padState.get(this.slots[1]) : null;
+    const holderIdle = holder && now - (holder.lastActive || 0) > 4000;
+    if (this.slots[0] !== null && (this.slots[1] === null || holderIdle)) {
+      const p1now = info.get(this.slots[0]);
+      for (const [idx, f] of info) {
+        // In split screen an empty seat two goes to any other pad that does anything at all.
+        const wants = f.join || (this.split && this.slots[1] === null && f.active);
+        if (idx === this.slots[0] || idx === this.slots[1] || !wants || mirrorOfP1(idx)) continue;
+        // Changed together with player one into the very same state: a copy, not a second player.
+        if (p1now && p1now.changed && f.changed && p1now.sig === f.sig) continue;
+        this.slots[1] = idx;
+        this.onJoin?.(f.pad.id);
+        break;
+      }
+    }
+    for (const f of info.values()) { if (f.st) { f.st.seatPrevA = f.a; f.st.seatPrevStart = f.start; } }
   }
 
   // Player two's controls (split screen): the second connected pad, or nothing.
