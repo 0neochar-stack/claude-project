@@ -46,7 +46,7 @@ select { background: transparent; color: var(--fg); border: 1px solid var(--line
 <div id="stage" aria-label="3D animation stage. Drag to orbit, pinch or scroll to zoom."></div>
 
 <div class="top">
-  <div class="title"><h1 id="clip-title">Loading&hellip;</h1><p id="clip-sub">Motion capture retargeted onto a standard Roblox R15 rig.</p></div>
+  <div class="title"><h1 id="clip-title">Loading&hellip;</h1><p id="clip-sub">Motion capture retargeted onto a Roblox rig.</p></div>
   <div class="stats" id="stats" aria-live="polite"></div>
 </div>
 
@@ -79,7 +79,7 @@ select { background: transparent; color: var(--fg); border: 1px solid var(--line
 <script>
 "use strict";
 const CLIPS = [
-  { file: "clips/jump360.json", label: "360 jump", note: "CMU motion capture 75_08 (free for commercial use)" },
+  { file: "clips/jump360-r6.json", label: "360 jump", note: "CMU motion capture 75_08 (free for commercial use)" },
 ];
 const $ = id => document.getElementById(id);
 const state = { clip: null, t: 0, playing: true, speed: 1, loop: true, mocap: false, trail: true, cam: "front" };
@@ -122,11 +122,15 @@ const PART_COLORS = {
   Head: 0xd9a77f, UpperTorso: 0x23706a, LowerTorso: 0x26344a,
   LeftUpperArm: 0x23706a, LeftLowerArm: 0xd9a77f, LeftHand: 0xd9a77f, RightUpperArm: 0x23706a, RightLowerArm: 0xd9a77f, RightHand: 0xd9a77f,
   LeftUpperLeg: 0x2a3a52, LeftLowerLeg: 0x2a3a52, LeftFoot: 0x1f2633, RightUpperLeg: 0x2a3a52, RightLowerLeg: 0x2a3a52, RightFoot: 0x1f2633,
+  Torso: 0x23706a, "Left Arm": 0xd9a77f, "Right Arm": 0xd9a77f, "Left Leg": 0x26344a, "Right Leg": 0x26344a,
 };
+// R6 heads are a 2x1x1 part drawn with a rounded mesh in Roblox; show the visible size instead
+const DISPLAY_SIZE = { R6: { Head: [1.25, 1.25, 1.25] } };
 const rig = {}; const rigGroup = new THREE.Group(); scene.add(rigGroup);
-function buildRig(sizes) {
-  rigGroup.clear();
-  for (const [name, s] of Object.entries(sizes)) {
+function buildRig(sizes, rigType) {
+  rigGroup.clear(); for (const k in rig) delete rig[k];
+  for (const [name, s0] of Object.entries(sizes)) {
+    const s = (DISPLAY_SIZE[rigType] || {})[name] || s0;
     const g = new THREE.BoxGeometry(s[0] * 0.98, s[1] * 0.98, s[2] * 0.98);
     const mat = new THREE.MeshStandardMaterial({ color: PART_COLORS[name] || 0xcccccc, roughness: 0.55, metalness: 0.05 });
     const mesh = new THREE.Mesh(g, mat); mesh.castShadow = true; mesh.receiveShadow = true;
@@ -174,9 +178,9 @@ function poseRig(t) {
     mocapLines.geometry.attributes.position.needsUpdate = true;
     const dp = mocapDots.geometry.attributes.position.array; P.forEach((_, j) => dp.set(lerpJ(j), j * 3)); mocapDots.geometry.attributes.position.needsUpdate = true; }
 }
-const handLocal = new THREE.Vector3(0, -0.16, 0);
+const handLocal = new THREE.Vector3();
 function handPos(t, out) { // right hand tip in world space at time t
-  const c = state.clip; const [i, u] = frameAt(t); const a = c.frames[i].RightHand, b = c.frames[i + 1].RightHand;
+  const c = state.clip; const [i, u] = frameAt(t); const hn = state.hand[0]; handLocal.set(0, state.hand[1], 0); const a = c.frames[i][hn], b = c.frames[i + 1][hn];
   qa.set(a[4], a[5], a[6], a[3]); qb.set(b[4], b[5], b[6], b[3]); qa.slerp(qb, u);
   out.copy(handLocal).applyQuaternion(qa).add(va.set(a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u)); return out; }
 const tmpV = new THREE.Vector3();
@@ -235,9 +239,9 @@ async function loadClip(i) {
   try {
     const res = await fetch(meta.file); if (!res.ok) throw new Error(res.status);
     const c = await res.json(); c.duration = (c.frames.length - 1) / c.fps; state.clip = c; state.t = 0;
-    buildRig(c.sizes); buildMocap(c.source); mocapGroup.visible = state.mocap;
+    buildRig(c.sizes, c.rig || "R15"); state.hand = c.frames[0].RightHand ? ["RightHand", -0.16] : ["Right Arm", -0.95]; buildMocap(c.source); mocapGroup.visible = state.mocap;
     if (state.mocap) rigGroup.children.forEach(m => { m.material.transparent = true; m.material.opacity = 0.45; });
-    $("clip-title").textContent = meta.label; $("clip-sub").textContent = meta.note + " \u00b7 retargeted onto a standard R15 rig.";
+    $("clip-title").textContent = meta.label; $("clip-sub").textContent = meta.note + " \u00b7 retargeted onto a Roblox " + (c.rig || "R15") + " rig.";
     $("t-end").textContent = c.duration.toFixed(2) + "s";
     const ch = c.meta && c.meta.checks;
     $("stats").innerHTML = ch ? `${c.fps} fps \u00b7 ${c.frames.length} frames<br>planted-foot slide <b>${ch.foot_slip_planted_studs ?? "\u2013"} studs</b>` : "";
