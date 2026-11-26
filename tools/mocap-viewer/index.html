@@ -1,0 +1,266 @@
+<title>Rig Motion Viewer</title>
+<meta charset="utf-8">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a full-bleed 3D stage with a floating transport dock, like a mobile animation review tool. */
+:root {
+  --bg: #0d1117; --stage-top: #1b2331; --stage-bottom: #0d1117; --panel: rgba(20, 26, 36, 0.86); --line: rgba(255,255,255,0.10);
+  --fg: #eef2f7; --muted: #94a0b4; --accent: #ffb23e; --mocap: #45d3c1; --good: #45d3c1;
+  --font-display: "Sora", "Segoe UI", system-ui, sans-serif; --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font-body); overflow: hidden; }
+#stage { position: fixed; inset: 0; background: radial-gradient(120% 80% at 50% 0%, var(--stage-top), var(--stage-bottom)); touch-action: none; }
+#stage canvas { display: block; width: 100%; height: 100%; }
+.top { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; pointer-events: none; }
+.title { pointer-events: auto; }
+.title h1 { margin: 0; font: 700 1.15rem var(--font-display); letter-spacing: -0.01em; }
+.title p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; max-width: 46ch; }
+.stats { pointer-events: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: 500 11px/1.55 var(--font-mono); color: var(--muted); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); min-width: 0; }
+.stats b { color: var(--good); font-weight: 500; }
+.dock { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); max-width: 760px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: grid; gap: 10px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.row > * { min-width: 0; }
+.play { width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--accent); color: #1b1203; display: grid; place-items: center; cursor: pointer; flex: none; }
+.play svg { width: 18px; height: 18px; }
+.scrub-wrap { flex: 1 1 200px; display: grid; gap: 4px; }
+input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
+.time { display: flex; justify-content: space-between; font: 500 11px var(--font-mono); color: var(--muted); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: transparent; color: var(--muted); font: 600 12.5px var(--font-body); padding: 7px 11px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: rgba(255,178,62,0.14); color: var(--accent); border-color: rgba(255,178,62,0.45); }
+.chip.mocap[aria-pressed="true"] { background: rgba(69,211,193,0.14); color: var(--mocap); border-color: rgba(69,211,193,0.45); }
+.sep { width: 1px; height: 22px; background: var(--line); }
+select { background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 999px; font: 600 12.5px var(--font-body); padding: 7px 10px; max-width: 100%; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.err { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--muted); }
+.hint { color: var(--muted); font-size: 11.5px; }
+@media (max-width: 520px) { .title p { display: none; } .stats { font-size: 10px; } }
+</style>
+
+<div id="stage" aria-label="3D animation stage. Drag to orbit, pinch or scroll to zoom."></div>
+
+<div class="top">
+  <div class="title"><h1 id="clip-title">Loading&hellip;</h1><p id="clip-sub">Motion capture retargeted onto a standard Roblox R15 rig.</p></div>
+  <div class="stats" id="stats" aria-live="polite"></div>
+</div>
+
+<div class="dock">
+  <div class="row">
+    <button class="play" id="play" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor" id="play-icon"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>
+    <div class="scrub-wrap">
+      <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Scrub">
+      <div class="time"><span id="t-now">0.00s</span><span id="t-frame">f0</span><span id="t-end">0.00s</span></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="chips" role="group" aria-label="Speed">
+      <button class="chip" data-speed="0.1">0.1&times;</button><button class="chip" data-speed="0.25">&frac14;&times;</button><button class="chip" data-speed="0.5">&frac12;&times;</button><button class="chip" data-speed="1" aria-pressed="true">1&times;</button>
+    </div>
+    <span class="sep"></span>
+    <div class="chips" role="group" aria-label="Camera">
+      <button class="chip" data-cam="front" aria-pressed="true">Front</button><button class="chip" data-cam="side">Side</button><button class="chip" data-cam="top">Above</button><button class="chip" data-cam="orbit">Orbit</button>
+    </div>
+  </div>
+  <div class="row">
+    <button class="chip mocap" id="t-mocap" aria-pressed="false">Mocap skeleton</button>
+    <button class="chip" id="t-trail" aria-pressed="true">Hand trail</button>
+    <button class="chip" id="t-loop" aria-pressed="true">Loop</button>
+    <select id="clip" aria-label="Clip"></select>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+const CLIPS = [
+  { file: "clips/jump360.json", label: "360 jump", note: "CMU motion capture 75_08 (free for commercial use)" },
+];
+const $ = id => document.getElementById(id);
+const state = { clip: null, t: 0, playing: true, speed: 1, loop: true, mocap: false, trail: true, cam: "front" };
+
+if (!window.THREE) {
+  document.body.insertAdjacentHTML("beforeend", '<div class="err">The 3D engine didn\'t load. Check your connection and reload.</div>');
+  throw new Error("three.js missing");
+}
+
+/* ---------- scene ---------- */
+const stage = $("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x0d1117, 30, 70);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+
+scene.add(new THREE.HemisphereLight(0xc9d8f0, 0x141820, 0.5));
+const key = new THREE.DirectionalLight(0xfff4e6, 0.85);
+key.position.set(-6, 14, -8); key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024); key.shadow.camera.left = -8; key.shadow.camera.right = 8; key.shadow.camera.top = 8; key.shadow.camera.bottom = -8;
+key.shadow.bias = -0.0005; scene.add(key);
+const rim = new THREE.DirectionalLight(0x7fd8ff, 0.4); rim.position.set(8, 6, 10); scene.add(rim);
+
+// floor: soft disc + rings + grid
+const floor = new THREE.Mesh(new THREE.CircleGeometry(26, 64), new THREE.MeshStandardMaterial({ color: 0x161c26, roughness: 0.95, metalness: 0 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const grid = new THREE.GridHelper(40, 40, 0x2b3445, 0x1e2532); grid.position.y = 0.002; scene.add(grid);
+for (const r of [2, 4]) { const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.015, r + 0.015, 96), new THREE.MeshBasicMaterial({ color: 0x3a4659, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.004; scene.add(ring); }
+// facing arrow on the floor (Roblox characters face -Z)
+const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.6, 3), new THREE.MeshBasicMaterial({ color: 0xffb23e }));
+arrow.rotation.x = -Math.PI / 2; arrow.position.set(0, 0.01, -2.6); scene.add(arrow);
+
+/* ---------- rig ---------- */
+const PART_COLORS = {
+  Head: 0xd9a77f, UpperTorso: 0x23706a, LowerTorso: 0x26344a,
+  LeftUpperArm: 0x23706a, LeftLowerArm: 0xd9a77f, LeftHand: 0xd9a77f, RightUpperArm: 0x23706a, RightLowerArm: 0xd9a77f, RightHand: 0xd9a77f,
+  LeftUpperLeg: 0x2a3a52, LeftLowerLeg: 0x2a3a52, LeftFoot: 0x1f2633, RightUpperLeg: 0x2a3a52, RightLowerLeg: 0x2a3a52, RightFoot: 0x1f2633,
+};
+const rig = {}; const rigGroup = new THREE.Group(); scene.add(rigGroup);
+function buildRig(sizes) {
+  rigGroup.clear();
+  for (const [name, s] of Object.entries(sizes)) {
+    const g = new THREE.BoxGeometry(s[0] * 0.98, s[1] * 0.98, s[2] * 0.98);
+    const mat = new THREE.MeshStandardMaterial({ color: PART_COLORS[name] || 0xcccccc, roughness: 0.55, metalness: 0.05 });
+    const mesh = new THREE.Mesh(g, mat); mesh.castShadow = true; mesh.receiveShadow = true;
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 }));
+    mesh.add(edges);
+    if (name === "Head") { // face: two eyes on the -Z side (forward)
+      for (const x of [-0.2, 0.2]) { const eye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.02), new THREE.MeshBasicMaterial({ color: 0x1a1a1a }));
+        eye.position.set(x, 0.08, -s[2] * 0.5); mesh.add(eye); }
+    }
+    rigGroup.add(mesh); rig[name] = mesh;
+  }
+}
+
+/* ---------- mocap skeleton overlay ---------- */
+const mocapGroup = new THREE.Group(); scene.add(mocapGroup);
+let mocapLines = null, mocapDots = null;
+function buildMocap(src) {
+  mocapGroup.clear();
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(src.bones.length * 6), 3));
+  mocapLines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x45d3c1, depthTest: false, transparent: true, opacity: 0.95 }));
+  mocapLines.renderOrder = 10; mocapGroup.add(mocapLines);
+  const dg = new THREE.BufferGeometry(); dg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(src.frames[0].length * 3), 3));
+  mocapDots = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0x45d3c1, size: 0.16, depthTest: false }));
+  mocapDots.renderOrder = 11; mocapGroup.add(mocapDots);
+}
+
+/* ---------- hand trail ---------- */
+const TRAIL_N = 40;
+const trailGeo = new THREE.BufferGeometry(); trailGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(TRAIL_N * 3), 3));
+const trailColors = new Float32Array(TRAIL_N * 3); trailGeo.setAttribute("color", new THREE.BufferAttribute(trailColors, 3));
+const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 })); scene.add(trail);
+
+/* ---------- sampling ---------- */
+const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), va = new THREE.Vector3(), vb = new THREE.Vector3();
+function frameAt(t) { const c = state.clip, n = c.frames.length, f = Math.max(0, Math.min(n - 1, t * c.fps)); const i = Math.min(n - 2, Math.floor(f)); return [i, f - i]; }
+function poseRig(t) {
+  const c = state.clip; const [i, u] = frameAt(t); const A = c.frames[i], B = c.frames[i + 1];
+  for (const name in rig) { const a = A[name], b = B[name]; if (!a) continue;
+    va.set(a[0], a[1], a[2]); vb.set(b[0], b[1], b[2]); rig[name].position.lerpVectors(va, vb, u);
+    qa.set(a[4], a[5], a[6], a[3]); qb.set(b[4], b[5], b[6], b[3]); rig[name].quaternion.copy(qa).slerp(qb, u); }
+  if (mocapLines) { const S = c.source.frames, P = S[i], Q = S[i + 1];
+    const pos = mocapLines.geometry.attributes.position.array; let k = 0;
+    const lerpJ = j => [P[j][0] + (Q[j][0] - P[j][0]) * u, P[j][1] + (Q[j][1] - P[j][1]) * u, P[j][2] + (Q[j][2] - P[j][2]) * u];
+    for (const [a, b] of c.source.bones) { const pa = lerpJ(a), pb = lerpJ(b); pos.set(pa, k); pos.set(pb, k + 3); k += 6; }
+    mocapLines.geometry.attributes.position.needsUpdate = true;
+    const dp = mocapDots.geometry.attributes.position.array; P.forEach((_, j) => dp.set(lerpJ(j), j * 3)); mocapDots.geometry.attributes.position.needsUpdate = true; }
+}
+const handLocal = new THREE.Vector3(0, -0.16, 0);
+function handPos(t, out) { // right hand tip in world space at time t
+  const c = state.clip; const [i, u] = frameAt(t); const a = c.frames[i].RightHand, b = c.frames[i + 1].RightHand;
+  qa.set(a[4], a[5], a[6], a[3]); qb.set(b[4], b[5], b[6], b[3]); qa.slerp(qb, u);
+  out.copy(handLocal).applyQuaternion(qa).add(va.set(a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u)); return out; }
+const tmpV = new THREE.Vector3();
+function updateTrail(t) {
+  trail.visible = state.trail; if (!state.trail) return;
+  const arr = trailGeo.attributes.position.array, dur = state.clip.duration;
+  for (let k = 0; k < TRAIL_N; k++) { let tk = t - k / 60; if (tk < 0) tk = state.loop ? tk + dur : 0;
+    handPos(tk, tmpV); arr.set([tmpV.x, tmpV.y, tmpV.z], k * 3); const f = 1 - k / TRAIL_N;
+    trailColors.set([1.0 * f + 0.05, 0.7 * f + 0.05, 0.24 * f + 0.06], k * 3); }
+  trailGeo.attributes.position.needsUpdate = true; trailGeo.attributes.color.needsUpdate = true;
+}
+
+/* ---------- camera: touch orbit + pinch ---------- */
+const orbit = { yaw: 0, pitch: 0.18, dist: 11, target: new THREE.Vector3(0, 2.8, 0), auto: false, scale: 1 };
+const CAMS = { front: [0, 0.18, 11], side: [Math.PI / 2, 0.12, 11], top: [0.5, 1.05, 13], orbit: [0.6, 0.25, 12] };
+function setCam(name) { state.cam = name; const c = CAMS[name]; orbit.yaw = c[0]; orbit.pitch = c[1]; orbit.dist = c[2]; orbit.auto = name === "orbit";
+  document.querySelectorAll("[data-cam]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.cam === name))); }
+function placeCamera() { // yaw 0 = in front of the character (it faces -Z)
+  const d = orbit.dist * orbit.scale;
+  const x = Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * d, y = Math.sin(orbit.pitch) * d, z = -Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * d;
+  camera.position.set(orbit.target.x + x, orbit.target.y + y, orbit.target.z + z); camera.lookAt(orbit.target); }
+const pointers = new Map(); let pinch0 = 0, dist0 = 0;
+stage.addEventListener("pointerdown", e => { stage.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); orbit.auto = false;
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = orbit.dist; } });
+stage.addEventListener("pointermove", e => { if (!pointers.has(e.pointerId)) return; const prev = pointers.get(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 1) { orbit.yaw -= (e.clientX - prev[0]) * 0.008; orbit.pitch = Math.max(-0.2, Math.min(1.4, orbit.pitch + (e.clientY - prev[1]) * 0.006)); }
+  else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) orbit.dist = Math.max(4, Math.min(30, dist0 * pinch0 / d)); } });
+const up = e => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch0 = 0; };
+stage.addEventListener("pointerup", up); stage.addEventListener("pointercancel", up);
+stage.addEventListener("wheel", e => { e.preventDefault(); orbit.dist = Math.max(4, Math.min(30, orbit.dist * (1 + Math.sign(e.deltaY) * 0.08))); }, { passive: false });
+
+function resize() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h;
+  const portrait = w < h; camera.fov = portrait ? 50 : 38;
+  // keep the character in the space above the dock
+  const dockH = document.querySelector(".dock").getBoundingClientRect().height + 24;
+  camera.setViewOffset(w, h, 0, dockH * 0.5, w, h); camera.updateProjectionMatrix();
+  orbit.target.y = 2.8; orbit.scale = portrait ? 1.45 : 1; }
+window.addEventListener("resize", resize);
+
+/* ---------- UI ---------- */
+const PLAY = '<path d="M7 5l12 7-12 7z"/>', PAUSE = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+function setPlaying(p) { state.playing = p; $("play-icon").innerHTML = p ? PAUSE : PLAY; $("play").setAttribute("aria-label", p ? "Pause" : "Play"); }
+$("play").onclick = () => { if (!state.loop && state.t >= state.clip.duration) state.t = 0; setPlaying(!state.playing); };
+$("scrub").addEventListener("input", e => { state.t = state.clip.duration * e.target.value / 1000; setPlaying(false); });
+document.querySelectorAll("[data-speed]").forEach(b => b.onclick = () => { state.speed = +b.dataset.speed;
+  document.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); });
+document.querySelectorAll("[data-cam]").forEach(b => b.onclick = () => setCam(b.dataset.cam));
+const toggle = (id, keyName, after) => $(id).onclick = () => { state[keyName] = !state[keyName]; $(id).setAttribute("aria-pressed", String(state[keyName])); after && after(); };
+toggle("t-mocap", "mocap", () => { mocapGroup.visible = state.mocap; rigGroup.children.forEach(m => { m.material.transparent = state.mocap; m.material.opacity = state.mocap ? 0.45 : 1; }); });
+toggle("t-trail", "trail"); toggle("t-loop", "loop");
+CLIPS.forEach((c, i) => { const o = document.createElement("option"); o.value = i; o.textContent = c.label; $("clip").appendChild(o); });
+$("clip").onchange = e => loadClip(+e.target.value);
+
+async function loadClip(i) {
+  const meta = CLIPS[i];
+  try {
+    const res = await fetch(meta.file); if (!res.ok) throw new Error(res.status);
+    const c = await res.json(); c.duration = (c.frames.length - 1) / c.fps; state.clip = c; state.t = 0;
+    buildRig(c.sizes); buildMocap(c.source); mocapGroup.visible = state.mocap;
+    if (state.mocap) rigGroup.children.forEach(m => { m.material.transparent = true; m.material.opacity = 0.45; });
+    $("clip-title").textContent = meta.label; $("clip-sub").textContent = meta.note + " \u00b7 retargeted onto a standard R15 rig.";
+    $("t-end").textContent = c.duration.toFixed(2) + "s";
+    const ch = c.meta && c.meta.checks;
+    $("stats").innerHTML = ch ? `R15 vs mocap<br>bone match <b>${ch.bone_dir_error_median_deg}\u00b0</b> median \u00b7 ${ch.bone_dir_error_p95_deg}\u00b0 p95<br>feet on floor <b>${ch.lowest_foot_studs >= -0.05 ? "yes" : ch.lowest_foot_studs}</b> \u00b7 ${c.fps} fps \u00b7 ${c.frames.length} frames` : "";
+    setPlaying(true);
+  } catch (err) { $("clip-title").textContent = "Couldn't load this clip"; $("clip-sub").textContent = "Reload the page to try again."; }
+}
+
+/* ---------- loop ---------- */
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (state.clip) {
+    const dur = state.clip.duration;
+    if (state.playing) { state.t += dt * state.speed;
+      if (state.t > dur) { if (state.loop) state.t = state.t > dur + 0.5 ? 0 : state.t; else { state.t = dur; setPlaying(false); } } }
+    const shown = Math.min(state.t, dur);
+    poseRig(shown); updateTrail(shown);
+    if (orbit.auto) orbit.yaw += dt * 0.35;
+    $("t-now").textContent = shown.toFixed(2) + "s"; $("t-frame").textContent = "f" + Math.round(shown * 60) + " @60";
+    if (document.activeElement !== $("scrub")) $("scrub").value = Math.round(1000 * shown / dur);
+  }
+  placeCamera(); renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+resize(); setCam("front"); loadClip(0); requestAnimationFrame(tick);
+</script>
