@@ -1,7 +1,7 @@
 # Clip format (shared by Smooth Anim Lab and the Luau players)
 
 One format describes both **camera cutscenes** and **pose clips**. The HTML previewer
-(`tools/smooth-anim-lab.html`) exports it with "Copy as Luau". The Luau players in `luau/` read it
+(`assets/smooth-anim-lab.html`, live at https://claude.ai/artifact/95q4KqEYKx476hrD6PtSaU) exports it with "Copy as Luau". The Luau players in `luau/` read it
 unchanged. Same data and same interpolation maths on both sides, so what the previewer shows is close
 to what Studio plays. It isn't identical: the previewer is 2D, and its Back, Elastic and Bounce curves
 are approximations.

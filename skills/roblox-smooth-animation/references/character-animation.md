@@ -141,6 +141,8 @@ simple games, a small Luau state machine plus `AnimationLibrary` is easier to de
 R15 rig every frame. It is meant for **client-side cutscene actors** (an anchored clone with no other
 tracks playing).
 
+- Channels: `Root`, `RootY` (body up/down in studs, applied to the Root joint), `Waist`, `Neck`, both
+  shoulders, elbows, hips and knees. See `clip-format.md`.
 - It is a **side-view, single-axis** approximation. Twists and side raises still need a real animation.
 - The sign convention is **unverified**: if limbs swing the wrong way, pass `flipSign = true`.
 - For anything players see in gameplay, export a real Animation from the Animation Editor or Moon Animator.

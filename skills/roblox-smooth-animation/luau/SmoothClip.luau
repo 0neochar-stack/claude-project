@@ -1,6 +1,6 @@
 --!strict
 -- SmoothClip: samples a clip (see references/clip-format.md) at any time.
--- Same maths as Smooth Anim Lab (tools/smooth-anim-lab.html), so previews and Studio agree.
+-- Same maths as Smooth Anim Lab (assets/smooth-anim-lab.html), so previews and Studio agree.
 -- Used by CutscenePlayer and PoseClipPlayer. Client-side only (pure maths, no replication).
 -- STATUS: written without a Luau runtime available; test in Studio before relying on it.
 

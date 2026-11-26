@@ -1,0 +1,670 @@
+<title>Smooth Anim Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a dark animation-tool workbench — twin stages (stop-and-go vs smooth) over a shared timeline, editor and export dock. */
+:root {
+  --bg: #11151c; --panel: #181e27; --panel-2: #1f2733; --line: #2c3644; --fg: #e7ecf3; --muted: #8d9aae;
+  --key: #ffb23e; --choppy: #ff6b5e; --smooth: #34d1bf; --focus: #7cb4ff;
+  --font-display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #eef1f5; --panel: #ffffff; --panel-2: #f4f6f9; --line: #d5dbe4; --fg: #18202b; --muted: #5b6778;
+  --key: #d98a00; --choppy: #d8463a; --smooth: #0f9d8c; --focus: #2f6fd6; color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg: #eef1f5; --panel: #ffffff; --panel-2: #f4f6f9; --line: #d5dbe4; --fg: #18202b; --muted: #5b6778;
+  --key: #d98a00; --choppy: #d8463a; --smooth: #0f9d8c; --focus: #2f6fd6; color-scheme: light; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 40px; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+h1 { font-family: var(--font-display); font-size: 1.45rem; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h1 b { color: var(--key); font-weight: 700; }
+.sub { color: var(--muted); margin: 0; max-width: 70ch; }
+h2 { font-family: var(--font-display); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0; font-weight: 500; }
+
+.tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; width: fit-content; max-width: 100%; overflow-x: auto; }
+.tabs button { border: 0; background: transparent; color: var(--muted); font: 600 13px var(--font-body); padding: 8px 14px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+
+.stage { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 720px) { .stage { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.panel-head .name { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.badge { font: 600 12px var(--font-mono); padding: 3px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.badge.bad { color: var(--choppy); } .badge.good { color: var(--smooth); }
+canvas { display: block; width: 100%; touch-action: none; }
+canvas.view { aspect-ratio: 16 / 10; background: var(--panel-2); }
+canvas.graph { height: 74px; border-top: 1px solid var(--line); }
+.graph-label { font: 11px var(--font-mono); color: var(--muted); padding: 4px 12px 6px; display: flex; justify-content: space-between; gap: 8px; }
+
+.dock { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.row > * { min-width: 0; }
+label.field { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; }
+select, input[type="number"], textarea { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; font: 13px var(--font-body); padding: 6px 8px; }
+input[type="number"] { width: 78px; font-family: var(--font-mono); }
+input[type="range"] { accent-color: var(--key); }
+button.btn { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; font: 600 13px var(--font-body); padding: 7px 12px; cursor: pointer; }
+button.btn:hover { border-color: var(--muted); }
+button.btn.primary { background: var(--key); color: #1a1205; border-color: transparent; min-width: 84px; }
+button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.time { font: 600 13px var(--font-mono); color: var(--fg); min-width: 128px; }
+#scrub { flex: 1 1 220px; }
+.timeline-wrap { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--panel-2); }
+#timeline { height: 60px; }
+.hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+.channels { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px 14px; }
+.chan { display: grid; grid-template-columns: 84px minmax(0,1fr) 72px; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.chan input[type="number"] { width: 100%; padding: 4px 6px; }
+.chan.active span { color: var(--key); font-weight: 600; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
+textarea { width: 100%; min-height: 150px; font: 12px/1.45 var(--font-mono); resize: vertical; }
+.msg { font-size: 12.5px; min-height: 1.2em; color: var(--smooth); }
+.msg.err { color: var(--choppy); }
+#map { aspect-ratio: 1 / 1; max-height: 340px; background: var(--panel-2); border-radius: 9px; border: 1px solid var(--line); }
+#curve { aspect-ratio: 4 / 3; max-height: 360px; background: var(--panel-2); border-radius: 9px; border: 1px solid var(--line); }
+.notes { color: var(--muted); font-size: 12.5px; display: grid; gap: 4px; max-width: 80ch; }
+.notes b { color: var(--fg); font-weight: 600; }
+kbd { font: 11px var(--font-mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Smooth Anim <b>Lab</b></h1>
+    <p class="sub">The same keyframes played two ways. Left: every key eased on its own, so it stops and starts. Right: one continuous curve, the way pro animation editors do it. Edit keys, then copy the clip into Studio.</p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Mode">
+    <button role="tab" id="tab-pose" aria-selected="true">Character</button>
+    <button role="tab" id="tab-camera" aria-selected="false">Cutscene camera</button>
+    <button role="tab" id="tab-ease" aria-selected="false">Easing curves</button>
+  </div>
+
+  <section id="anim-area" style="display:grid;gap:14px">
+    <div class="stage">
+      <div class="panel">
+        <div class="panel-head"><span class="name"><span class="swatch" style="background:var(--choppy)"></span>Stop-and-go</span><span class="badge bad" id="badge-a">–</span></div>
+        <canvas class="view" id="view-a" aria-label="Animation with every key eased separately"></canvas>
+        <canvas class="graph" id="graph-a" aria-label="Speed over time, stop-and-go"></canvas>
+        <div class="graph-label"><span>speed of <span class="track-name">right hand</span></span><span>red = stutter · grey = turn-around</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span class="name"><span class="swatch" style="background:var(--smooth)"></span>Smooth</span><span class="badge good" id="badge-b">–</span></div>
+        <canvas class="view" id="view-b" aria-label="Animation with one continuous curve"></canvas>
+        <canvas class="graph" id="graph-b" aria-label="Speed over time, smooth"></canvas>
+        <div class="graph-label"><span>speed of <span class="track-name">right hand</span></span><span>red = stutter · grey = turn-around</span></div>
+      </div>
+    </div>
+
+    <div class="dock">
+      <div class="row">
+        <button class="btn primary" id="play">Pause</button>
+        <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Scrub time">
+        <span class="time" id="time">0.00s · f0</span>
+      </div>
+      <div class="row">
+        <label class="field">Preset <select id="preset"></select></label>
+        <label class="field">Speed <select id="speed"><option value="0.1">0.1×</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
+        <label class="field"><input type="checkbox" id="loop"> Loop</label>
+        <label class="field" id="track-field">Trail <select id="track"><option value="hand">Right hand</option><option value="foot">Right foot</option><option value="head">Head</option></select></label>
+        <label class="field"><input type="checkbox" id="trail" checked> Motion trail</label>
+      </div>
+    </div>
+
+    <div class="dock">
+      <div class="row" style="justify-content:space-between"><h2>Keyframes</h2><p class="hint">Tap a diamond to edit it. Tap empty track to jump there.</p></div>
+      <div class="timeline-wrap"><canvas id="timeline" aria-label="Timeline with keyframes"></canvas></div>
+      <div class="row">
+        <button class="btn" id="add-key">Add key here</button>
+        <button class="btn" id="del-key">Delete key</button>
+        <label class="field">Key time <input type="number" id="key-time" step="0.01" min="0"></label>
+        <label class="field">Length <input type="number" id="duration" step="0.05" min="0.2"></label>
+        <label class="field">Left-side ease <select id="ease-style"></select></label>
+        <select id="ease-dir" aria-label="Ease direction"><option>In</option><option>Out</option><option selected>InOut</option></select>
+      </div>
+      <p class="hint" id="key-label">Key 1</p>
+      <div class="channels" id="channels"></div>
+    </div>
+
+    <div class="dock" id="map-dock" hidden>
+      <div class="row" style="justify-content:space-between"><h2>Top-down path</h2><p class="hint">Dashed red = key-to-key path. Teal = smooth curve. Diamonds = keys.</p></div>
+      <canvas id="map" aria-label="Top-down camera path"></canvas>
+    </div>
+
+    <div class="dock">
+      <div class="row" style="justify-content:space-between"><h2>Studio export</h2>
+        <label class="field">Export as <select id="export-mode"><option value="smooth" selected>smooth</option><option value="segments">segments (stop-and-go)</option></select></label></div>
+      <div class="two">
+        <div style="display:grid;gap:8px;min-width:0">
+          <div class="row"><button class="btn" id="copy-luau">Copy as Luau</button><button class="btn" id="copy-json">Copy as JSON</button></div>
+          <textarea id="out" readonly aria-label="Exported clip"></textarea>
+        </div>
+        <div style="display:grid;gap:8px;min-width:0">
+          <div class="row"><button class="btn" id="load">Load pasted clip</button></div>
+          <textarea id="in" placeholder="Paste a clip from Claude here (Luau table or JSON), then tap Load." aria-label="Paste a clip"></textarea>
+        </div>
+      </div>
+      <p class="msg" id="msg" role="status"></p>
+    </div>
+  </section>
+
+  <section id="ease-area" class="dock" hidden>
+    <div class="row">
+      <label class="field">Style <select id="curve-style"></select></label>
+      <label class="field">Direction <select id="curve-dir"><option>In</option><option>Out</option><option selected>InOut</option></select></label>
+    </div>
+    <canvas id="curve" aria-label="Easing curve"></canvas>
+    <p class="hint">Grey = Linear. Amber = the chosen curve. The block on the right moves with the curve, the ghost on the left moves at constant speed. <b>Out</b> = fast start, soft landing (UI entering, hits landing). <b>In</b> = soft start, fast end (things leaving, wind-ups). <b>InOut</b> = soft at both ends. Use it once per whole move, not on every key.</p>
+  </section>
+
+  <div class="notes">
+    <div><b>How close is this to Studio?</b> Close on timing and smoothness, not on looks. The rig is a 2D side view. Back, Elastic and Bounce are approximations of Roblox's curves; the Luau players use Roblox's real ones.</div>
+    <div><b>Using a clip in Studio:</b> "Copy as Luau", then give it to Claude with the skill's <kbd>CutscenePlayer</kbd> (camera) or <kbd>PoseClipPlayer</kbd> (character, experimental).</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============ Easing (Roblox EasingStyle / EasingDirection) ============ */
+/* A "stutter" = the motion stops and then keeps going the same way (the stop-and-go look).
+   A "turn-around" = it stops because it reverses (wind-up into swing): that's natural. */
+const STYLES = ["Linear","Sine","Quad","Cubic","Quart","Quint","Exponential","Circular","Back","Elastic","Bounce"];
+function bounceOut(t){ const n=7.5625,d=2.75;
+  if(t<1/d) return n*t*t; if(t<2/d){t-=1.5/d;return n*t*t+0.75;} if(t<2.5/d){t-=2.25/d;return n*t*t+0.9375;} t-=2.625/d; return n*t*t+0.984375; }
+const EASE_IN = {
+  Linear:t=>t, Sine:t=>1-Math.cos(t*Math.PI/2), Quad:t=>t*t, Cubic:t=>t*t*t, Quart:t=>t*t*t*t, Quint:t=>t*t*t*t*t,
+  Exponential:t=>t<=0?0:Math.pow(2,10*(t-1)), Circular:t=>1-Math.sqrt(Math.max(0,1-t*t)),
+  Back:t=>t*t*(2.70158*t-1.70158),
+  Elastic:t=>t<=0?0:t>=1?1:-Math.pow(2,10*(t-1))*Math.sin((t-1-0.075)*2*Math.PI/0.3),
+  Bounce:t=>1-bounceOut(1-t),
+};
+function ease(style, dir, s){ const f=EASE_IN[style]||EASE_IN.Linear; s=Math.min(1,Math.max(0,s));
+  if(dir==="In") return f(s); if(dir==="Out") return 1-f(1-s);
+  return s<0.5 ? f(2*s)/2 : 1-f(2-2*s)/2; }
+
+/* ============ Clip maths (identical to luau/SmoothClip.luau) ============ */
+const JOINTS = ["Root","RootY","Waist","Neck","RightShoulder","RightElbow","LeftShoulder","LeftElbow","RightHip","RightKnee","LeftHip","LeftKnee"];
+const JOINT_LABEL = {Root:"Body lean",RootY:"Body height",Waist:"Waist",Neck:"Neck",RightShoulder:"R shoulder",RightElbow:"R elbow",LeftShoulder:"L shoulder",LeftElbow:"L elbow",RightHip:"R hip",RightKnee:"R knee",LeftHip:"L hip",LeftKnee:"L knee"};
+const CAM_CH = ["pos.x","pos.y","pos.z","look.x","look.y","look.z","fov"];
+function extract(clip, key){
+  if(clip.kind==="camera") return [key.pos[0],key.pos[1],key.pos[2],key.look[0],key.look[1],key.look[2],key.fov??70];
+  return JOINTS.map(j=>(key.pose&&key.pose[j])||0);
+}
+function compile(clip, mode){
+  const keys=clip.keys, n=keys.length, loop=!!clip.loop, D=clip.duration;
+  const times=keys.map(k=>k.t), values=keys.map(k=>extract(clip,k)), C=values[0].length;
+  const eases=keys.map(k=>k.ease||{style:"Sine",direction:"InOut"});
+  const tangents=[];
+  for(let i=0;i<n;i++){ const row=[];
+    for(let c=0;c<C;c++){ let m=0, ok=true, tp,pp,tn,pn;
+      if(i>0&&i<n-1){ tp=times[i-1];pp=values[i-1][c];tn=times[i+1];pn=values[i+1][c]; }
+      else if(loop&&n>=3){ if(i===0){tp=times[n-2]-D;pp=values[n-2][c];tn=times[1];pn=values[1][c];}
+                           else {tp=times[n-2];pp=values[n-2][c];tn=times[1]+D;pn=values[1][c];} }
+      else ok=false;
+      if(ok){ const p=values[i][c]; if((p-pp)*(pn-p)>0) m=(pn-pp)/(tn-tp); }
+      row.push(m); }
+    tangents.push(row); }
+  return {duration:D,mode,loop,times,values,tangents,eases,C};
+}
+function localTime(cc,t){ if(cc.loop){ const r=t%cc.duration; return r<0?r+cc.duration:r; } return Math.min(cc.duration,Math.max(0,t)); }
+function sample(cc,t){
+  const times=cc.times,n=times.length; t=localTime(cc,t);
+  let i=0; while(i<n-2&&t>=times[i+1]) i++;
+  const t0=times[i],t1=times[i+1],dt=t1-t0,s=Math.min(1,Math.max(0,(t-t0)/dt));
+  const v0=cc.values[i],v1=cc.values[i+1],out=new Array(cc.C);
+  if(cc.mode==="segments"){ const e=ease(cc.eases[i].style,cc.eases[i].direction,s);
+    for(let c=0;c<cc.C;c++) out[c]=v0[c]+(v1[c]-v0[c])*e; }
+  else { const s2=s*s,s3=s2*s,h00=2*s3-3*s2+1,h10=s3-2*s2+s,h01=-2*s3+3*s2,h11=s3-s2,m0=cc.tangents[i],m1=cc.tangents[i+1];
+    for(let c=0;c<cc.C;c++) out[c]=h00*v0[c]+h10*dt*m0[c]+h01*v1[c]+h11*dt*m1[c]; }
+  return out;
+}
+
+/* ============ Rig (2D side view, studs) ============ */
+const RIG={hipH:2.3,lowTorso:0.5,upTorso:1.5,head:0.62,upArm:1.05,loArm:1.0,upLeg:1.15,loLeg:1.15};
+const rad=d=>d*Math.PI/180;
+const dirDown=a=>[Math.sin(a),-Math.cos(a)];   // 0 = hanging down, + = swing forward (facing right)
+const dirUp=a=>[Math.sin(a),Math.cos(a)];      // 0 = upright, + = lean forward
+function solveRig(v){
+  const J={}; JOINTS.forEach((j,i)=>J[j]=v[i]);
+  const lean=rad(J.Root), H=[0,RIG.hipH+J.RootY];
+  const u1=dirUp(lean), W=[H[0]+u1[0]*RIG.lowTorso,H[1]+u1[1]*RIG.lowTorso];
+  const ta=lean+rad(J.Waist), u2=dirUp(ta), N=[W[0]+u2[0]*RIG.upTorso,W[1]+u2[1]*RIG.upTorso];
+  const S=[N[0]-u2[0]*0.18,N[1]-u2[1]*0.18];
+  const ha=ta+rad(J.Neck), u3=dirUp(ha), Hd=[N[0]+u3[0]*0.68,N[1]+u3[1]*0.68];
+  function limb(origin,base,a1,a2,l1,l2){ const d1=dirDown(base+rad(a1)),M=[origin[0]+d1[0]*l1,origin[1]+d1[1]*l1];
+    const d2=dirDown(base+rad(a1)+rad(a2)),E=[M[0]+d2[0]*l2,M[1]+d2[1]*l2]; return [origin,M,E]; }
+  return { H,W,N,Hd,headA:ha,
+    rArm:limb(S,ta,J.RightShoulder,J.RightElbow,RIG.upArm,RIG.loArm), lArm:limb(S,ta,J.LeftShoulder,J.LeftElbow,RIG.upArm,RIG.loArm),
+    rLeg:limb(H,lean,J.RightHip,J.RightKnee,RIG.upLeg,RIG.loLeg), lLeg:limb(H,lean,J.LeftHip,J.LeftKnee,RIG.upLeg,RIG.loLeg) };
+}
+function trackPoint(clip,v){
+  if(clip.kind==="camera") return [v[0],v[1],v[2]];
+  const r=solveRig(v), which=state.track;
+  if(which==="foot") return [r.rLeg[2][0],r.rLeg[2][1],0];
+  if(which==="head") return [r.Hd[0],r.Hd[1],0];
+  return [r.rArm[2][0],r.rArm[2][1],0];
+}
+
+/* ============ Presets ============ */
+const E=(style="Sine",direction="InOut")=>({style,direction});
+function P(o){ const p={}; JOINTS.forEach(j=>p[j]=o[j]||0); return p; }
+const POSE_PRESETS = {
+  "Walk cycle": {kind:"pose",duration:1.0,loop:true,markers:[],keys:[
+    {t:0,pose:P({Root:4,RootY:-0.1,RightHip:26,RightKnee:-4,LeftHip:-24,LeftKnee:-14,RightShoulder:-22,RightElbow:18,LeftShoulder:22,LeftElbow:18,Neck:-3}),ease:E()},
+    {t:0.25,pose:P({Root:4,RootY:0.07,RightHip:-4,RightKnee:-4,LeftHip:12,LeftKnee:-48,RightShoulder:0,RightElbow:15,LeftShoulder:0,LeftElbow:15,Neck:-3}),ease:E()},
+    {t:0.5,pose:P({Root:4,RootY:-0.1,RightHip:-24,RightKnee:-14,LeftHip:26,LeftKnee:-4,RightShoulder:22,RightElbow:18,LeftShoulder:-22,LeftElbow:18,Neck:-3}),ease:E()},
+    {t:0.75,pose:P({Root:4,RootY:0.07,RightHip:12,RightKnee:-48,LeftHip:-4,LeftKnee:-4,RightShoulder:0,RightElbow:15,LeftShoulder:0,LeftElbow:15,Neck:-3}),ease:E()},
+    {t:1.0,pose:P({Root:4,RootY:-0.1,RightHip:26,RightKnee:-4,LeftHip:-24,LeftKnee:-14,RightShoulder:-22,RightElbow:18,LeftShoulder:22,LeftElbow:18,Neck:-3}),ease:E()}]},
+  "Sword slash": {kind:"pose",duration:1.3,loop:false,markers:[{t:0.42,name:"Hit"}],keys:[
+    {t:0,pose:P({Root:4,RootY:-0.05,Waist:0,Neck:-4,RightShoulder:25,RightElbow:35,LeftShoulder:-10,LeftElbow:30,RightHip:18,RightKnee:-22,LeftHip:-14,LeftKnee:-12}),ease:E()},
+    {t:0.3,pose:P({Root:-8,RootY:-0.25,Waist:-18,Neck:8,RightShoulder:-155,RightElbow:40,LeftShoulder:35,LeftElbow:45,RightHip:30,RightKnee:-40,LeftHip:-25,LeftKnee:-20}),ease:E()},
+    {t:0.42,pose:P({Root:16,RootY:-0.45,Waist:22,Neck:-12,RightShoulder:85,RightElbow:4,LeftShoulder:-40,LeftElbow:25,RightHip:45,RightKnee:-55,LeftHip:-30,LeftKnee:-15}),ease:E()},
+    {t:0.62,pose:P({Root:22,RootY:-0.5,Waist:26,Neck:-14,RightShoulder:118,RightElbow:10,LeftShoulder:-48,LeftElbow:30,RightHip:48,RightKnee:-58,LeftHip:-32,LeftKnee:-14}),ease:E()},
+    {t:1.3,pose:P({Root:4,RootY:-0.05,Waist:0,Neck:-4,RightShoulder:25,RightElbow:35,LeftShoulder:-10,LeftElbow:30,RightHip:18,RightKnee:-22,LeftHip:-14,LeftKnee:-12}),ease:E()}]},
+  "Idle breathe": {kind:"pose",duration:3.0,loop:true,markers:[],keys:[
+    {t:0,pose:P({Waist:1,Neck:-2,RightShoulder:-4,RightElbow:8,LeftShoulder:4,LeftElbow:8,RightHip:3,LeftHip:-3}),ease:E()},
+    {t:1.4,pose:P({RootY:-0.05,Waist:4,Neck:-5,RightShoulder:-7,RightElbow:13,LeftShoulder:7,LeftElbow:13,RightHip:4,RightKnee:-4,LeftHip:-2,LeftKnee:-4}),ease:E()},
+    {t:3.0,pose:P({Waist:1,Neck:-2,RightShoulder:-4,RightElbow:8,LeftShoulder:4,LeftElbow:8,RightHip:3,LeftHip:-3}),ease:E()}]},
+  "Jump": {kind:"pose",duration:1.4,loop:false,markers:[{t:0.32,name:"Launch"},{t:1.0,name:"Land"}],keys:[
+    {t:0,pose:P({Neck:-2,RightShoulder:-4,RightElbow:10,LeftShoulder:4,LeftElbow:10}),ease:E()},
+    {t:0.25,pose:P({Root:18,RootY:-0.6,Waist:10,Neck:-14,RightShoulder:-45,RightElbow:20,LeftShoulder:-40,LeftElbow:20,RightHip:55,RightKnee:-80,LeftHip:50,LeftKnee:-75}),ease:E()},
+    {t:0.38,pose:P({Root:-4,RootY:1.4,Waist:-6,Neck:4,RightShoulder:160,RightElbow:10,LeftShoulder:150,LeftElbow:10,RightHip:-6,RightKnee:-6,LeftHip:-10,LeftKnee:-10}),ease:E()},
+    {t:0.7,pose:P({Root:2,RootY:2.6,Waist:2,Neck:-2,RightShoulder:120,RightElbow:30,LeftShoulder:110,LeftElbow:30,RightHip:35,RightKnee:-60,LeftHip:20,LeftKnee:-45}),ease:E()},
+    {t:1.0,pose:P({Root:16,RootY:-0.55,Waist:12,Neck:-12,RightShoulder:30,RightElbow:30,LeftShoulder:25,LeftElbow:30,RightHip:55,RightKnee:-80,LeftHip:50,LeftKnee:-76}),ease:E()},
+    {t:1.4,pose:P({Neck:-2,RightShoulder:-4,RightElbow:10,LeftShoulder:4,LeftElbow:10}),ease:E()}]},
+  "Punch combo": {kind:"pose",duration:1.5,loop:false,markers:[{t:0.28,name:"Jab"},{t:0.78,name:"Cross"}],keys:[
+    {t:0,pose:P({Root:6,Waist:0,Neck:-6,RightShoulder:40,RightElbow:110,LeftShoulder:55,LeftElbow:105,RightHip:-16,RightKnee:-18,LeftHip:20,LeftKnee:-16,RootY:-0.15}),ease:E()},
+    {t:0.18,pose:P({Root:4,Waist:-8,Neck:-4,RightShoulder:35,RightElbow:115,LeftShoulder:40,LeftElbow:120,RightHip:-18,RightKnee:-20,LeftHip:22,LeftKnee:-18,RootY:-0.2}),ease:E()},
+    {t:0.28,pose:P({Root:10,Waist:10,Neck:-8,RightShoulder:40,RightElbow:110,LeftShoulder:92,LeftElbow:4,RightHip:-18,RightKnee:-16,LeftHip:24,LeftKnee:-12,RootY:-0.18}),ease:E()},
+    {t:0.55,pose:P({Root:4,Waist:-14,Neck:-4,RightShoulder:30,RightElbow:120,LeftShoulder:55,LeftElbow:105,RightHip:-20,RightKnee:-22,LeftHip:22,LeftKnee:-18,RootY:-0.25}),ease:E()},
+    {t:0.78,pose:P({Root:18,Waist:24,Neck:-12,RightShoulder:95,RightElbow:2,LeftShoulder:45,LeftElbow:110,RightHip:-8,RightKnee:-10,LeftHip:32,LeftKnee:-26,RootY:-0.3}),ease:E()},
+    {t:1.5,pose:P({Root:6,Waist:0,Neck:-6,RightShoulder:40,RightElbow:110,LeftShoulder:55,LeftElbow:105,RightHip:-16,RightKnee:-18,LeftHip:20,LeftKnee:-16,RootY:-0.15}),ease:E()}]},
+};
+const CAM_PRESETS = {
+  "Boss reveal": {kind:"camera",duration:5.0,loop:false,markers:[{t:4.2,name:"Roar"}],keys:[
+    {t:0,pos:[22,1.5,26],look:[6,2,8],fov:62,ease:E()},
+    {t:1.6,pos:[13,2.5,17],look:[2,3.5,2],fov:58,ease:E()},
+    {t:3.2,pos:[6,4.5,11],look:[0,5,0],fov:48,ease:E()},
+    {t:5.0,pos:[1,5.4,7.5],look:[0,5.4,0],fov:38,ease:E()}]},
+  "Orbit loop": {kind:"camera",duration:8.0,loop:true,markers:[],keys:[
+    {t:0,pos:[16,7,0],look:[0,3,0],fov:60,ease:E()},
+    {t:2,pos:[0,7,16],look:[0,3,0],fov:60,ease:E()},
+    {t:4,pos:[-16,7,0],look:[0,3,0],fov:60,ease:E()},
+    {t:6,pos:[0,7,-16],look:[0,3,0],fov:60,ease:E()},
+    {t:8,pos:[16,7,0],look:[0,3,0],fov:60,ease:E()}]},
+  "Fly-by": {kind:"camera",duration:4.0,loop:false,markers:[],keys:[
+    {t:0,pos:[-26,3,12],look:[0,3,0],fov:55,ease:E()},
+    {t:1.3,pos:[-9,3.5,9],look:[0,3.5,0],fov:55,ease:E()},
+    {t:2.6,pos:[7,4,9],look:[0,4,0],fov:55,ease:E()},
+    {t:4.0,pos:[24,6,13],look:[0,4,0],fov:60,ease:E()}]},
+};
+
+/* ============ State ============ */
+const state = { tab:"pose", clip:null, t:0, playing:true, speed:1, sel:0, joint:"RightShoulder", track:"hand", trail:true,
+  ccA:null, ccB:null, speedA:null, speedB:null };
+const clone=o=>JSON.parse(JSON.stringify(o));
+function store(){ try{ localStorage.setItem("sal-"+state.tab, JSON.stringify(state.clip)); localStorage.setItem("sal-tab",state.tab);}catch(e){} }
+function restore(tab){ try{ const s=localStorage.getItem("sal-"+tab); if(s){ const c=JSON.parse(s); validate(c); if((c.kind==="camera")===(tab==="camera")) return c; } }catch(e){} return null; }
+
+function validate(c){
+  if(!c||typeof c!=="object") throw new Error("That isn't a clip.");
+  if(c.kind!=="pose"&&c.kind!=="camera") throw new Error('kind must be "pose" or "camera".');
+  if(!Array.isArray(c.keys)||c.keys.length<2) throw new Error("A clip needs at least 2 keys.");
+  if(!(c.duration>0)) throw new Error("duration must be a positive number.");
+  c.keys.forEach((k,i)=>{ if(typeof k.t!=="number") throw new Error(`Key ${i+1} has no time (t).`);
+    if(i>0&&!(k.t>c.keys[i-1].t)) throw new Error(`Key ${i+1}: times must increase.`);
+    if(c.kind==="camera"&&(!Array.isArray(k.pos)||!Array.isArray(k.look))) throw new Error(`Key ${i+1} needs pos and look.`);
+    if(c.kind==="pose"&&typeof k.pose!=="object") throw new Error(`Key ${i+1} needs a pose.`);
+    k.ease=k.ease||E(); if(c.kind==="pose") k.pose=P(k.pose); });
+  c.keys[0].t=0; c.keys[c.keys.length-1].t=c.duration; c.markers=c.markers||[]; c.loop=!!c.loop; c.version=1;
+  return c;
+}
+
+function rebuild(){
+  const c=state.clip;
+  if(c.loop){ const first=c.keys[0], last=c.keys[c.keys.length-1];
+    if(c.kind==="pose") last.pose=clone(first.pose); else { last.pos=clone(first.pos); last.look=clone(first.look); last.fov=first.fov; } }
+  state.ccA=compile(c,"segments"); state.ccB=compile(c,"smooth");
+  state.speedA=speedCurve(state.ccA); state.speedB=speedCurve(state.ccB);
+  setBadge("badge-a",state.speedA.stops); setBadge("badge-b",state.speedB.stops);
+  exportText(); store();
+}
+function speedCurve(cc){
+  const N=300,D=state.clip.duration,pts=[],sp=[]; let max=0;
+  for(let i=0;i<=N;i++) pts.push(trackPoint(state.clip,sample(cc,D*i/N)));
+  for(let i=0;i<=N;i++){ const a=pts[Math.max(0,i-1)],b=pts[Math.min(N,i+1)],dt=D*(Math.min(N,i+1)-Math.max(0,i-1))/N;
+    const v=Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2])/dt; sp.push(v); if(v>max) max=v; }
+  // stops: dips under 6% of peak speed, ignoring the very start/end of non-loops.
+  // A stop is a "stutter" (bad) when the motion carries on in the same direction afterwards,
+  // and a "turn" (natural) when it reverses, like a wind-up turning into a swing.
+  const thr=Math.max(1e-6,max*0.06), edge=cc.loop?0:Math.round(N*0.04), last=cc.loop?N-1:N-edge;
+  const at=i=> cc.loop ? pts[((i%N)+N)%N] : pts[Math.min(N,Math.max(0,i))];
+  let runs=[]; let start=-1;
+  for(let i=edge;i<=last;i++){ const low=sp[i]<thr; if(low&&start<0) start=i; if((!low||i===last)&&start>=0){ runs.push([start,low?i:i-1]); start=-1; } }
+  if(cc.loop&&runs.length>1&&runs[0][0]===0&&runs[runs.length-1][1]===N-1){ const l=runs.pop(); runs[0]=[l[0]-N,runs[0][1]]; }
+  if(!cc.loop) runs=runs.filter(([a,b])=>a>edge&&b<last); // the clip's own start/end rest isn't a stop
+  const w=Math.max(4,Math.round(0.12/D*N)); // compare ~0.12s of motion either side
+  const stops=[], turns=[];
+  for(const [a,b] of runs){ let mid=a; for(let i=a;i<=b;i++) if(sp[((i%N)+N)%N]<sp[((mid%N)+N)%N]) mid=i;
+    const p0=at(a-w),p1=at(a),p2=at(b),p3=at(b+w);
+    const before=[p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]], after=[p3[0]-p2[0],p3[1]-p2[1],p3[2]-p2[2]];
+    const nb=Math.hypot(...before), na=Math.hypot(...after);
+    const typical=max*D*w/N; // distance covered in the window at peak speed
+    if(nb<0.04*typical||na<0.04*typical){ turns.push((((mid%N)+N)%N)/N); continue; } // barely moving: a hold, not a stutter
+    const dot=(before[0]*after[0]+before[1]*after[1]+before[2]*after[2])/(nb*na);
+    state._dbg&&state._dbg.push([+(mid/N*D).toFixed(2),+dot.toFixed(2)]);
+    (dot>(state.clip.kind==="camera"?-0.3:0.3)?stops:turns).push((((mid%N)+N)%N)/N); }
+  return {sp,max,stops,turns};
+}
+function setBadge(id,stops){ const el=document.getElementById(id), n=stops.length;
+  el.textContent = n===0 ? "0 stutters" : `${n} stutter${n>1?"s":""}`; el.className="badge "+(n===0?"good":"bad"); }
+
+/* ============ Colors from tokens ============ */
+let COL={};
+function readColors(){ const cs=getComputedStyle(document.documentElement);
+  ["bg","panel","panel-2","line","fg","muted","key","choppy","smooth"].forEach(k=>COL[k]=cs.getPropertyValue("--"+k).trim()); }
+readColors();
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",()=>{readColors();});
+new MutationObserver(readColors).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+
+/* ============ Canvas helpers ============ */
+function fit(cv){ const r=cv.getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1);
+  const w=Math.max(1,Math.round(r.width*dpr)), h=Math.max(1,Math.round(r.height*dpr));
+  if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; }
+  const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); return {g,w:r.width,h:r.height}; }
+function alpha(col,a){ // works for #rrggbb
+  if(col.startsWith("#")&&col.length===7){ const n=parseInt(col.slice(1),16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; } return col; }
+
+/* ============ Draw: character ============ */
+function drawPose(cv,cc,accent){
+  const {g,w,h}=fit(cv); g.clearRect(0,0,w,h);
+  const scale=Math.min(w/9,h/9.2), ox=w/2, oy=h-scale*0.9;
+  const X=p=>ox+p[0]*scale, Y=p=>oy-p[1]*scale;
+  // ground + grid
+  g.strokeStyle=COL.line; g.lineWidth=1;
+  for(let gx=-6;gx<=6;gx++){ g.beginPath(); g.moveTo(ox+gx*scale,oy); g.lineTo(ox+gx*scale,oy+scale*0.9); g.stroke(); }
+  g.strokeStyle=COL.muted; g.lineWidth=1.5; g.beginPath(); g.moveTo(0,oy); g.lineTo(w,oy); g.stroke();
+  const v=sample(cc,state.t);
+  // motion trail
+  if(state.trail){ const steps=26;
+    for(let k=steps;k>=1;k--){ const tv=sample(cc,state.t-k/60); if(!cc.loop&&state.t-k/60<0) continue;
+      const p=trackPoint(state.clip,tv); g.fillStyle=alpha(accent,0.55*(1-k/steps)); g.beginPath(); g.arc(X(p),Y(p),Math.max(1.5,scale*0.09),0,Math.PI*2); g.fill(); } }
+  const r=solveRig(v), lw=scale*0.42;
+  g.lineCap="round"; g.lineJoin="round";
+  const seg=(pts,col,width)=>{ g.strokeStyle=col; g.lineWidth=width; g.beginPath(); g.moveTo(X(pts[0]),Y(pts[0])); for(let i=1;i<pts.length;i++) g.lineTo(X(pts[i]),Y(pts[i])); g.stroke(); };
+  const back=alpha(COL.muted,0.75);
+  seg(r.lArm,back,lw*0.8); seg(r.lLeg,back,lw*0.9);
+  seg([r.H,r.W,r.N],COL.fg,lw*1.35);
+  seg(r.rLeg,COL.fg,lw*0.95);
+  // head
+  g.fillStyle=COL.fg; g.beginPath(); g.arc(X(r.Hd),Y(r.Hd),RIG.head*scale,0,Math.PI*2); g.fill();
+  const face=[r.Hd[0]+Math.cos(r.headA)*0.32,r.Hd[1]-Math.sin(r.headA)*0.32+0.08];
+  g.fillStyle=COL["panel-2"]; g.beginPath(); g.arc(X(face),Y(face),scale*0.09,0,Math.PI*2); g.fill();
+  seg(r.rArm,accent,lw*0.85);
+  // joints
+  g.fillStyle=COL.key; [r.rArm[1],r.rLeg[1]].forEach(p=>{ g.beginPath(); g.arc(X(p),Y(p),scale*0.08,0,Math.PI*2); g.fill(); });
+  drawMarkerFlash(g,w,h,cc);
+}
+function drawMarkerFlash(g,w,h,cc){
+  const lt=localTime(cc,state.t);
+  for(const m of state.clip.markers||[]){ const d=lt-m.t; if(d>=0&&d<0.18){
+    g.fillStyle=alpha(COL.key,0.9*(1-d/0.18)); g.font=`600 ${Math.max(11,w*0.032)}px ${getComputedStyle(document.body).getPropertyValue("--font-mono")||"monospace"}`;
+    g.fillText("● "+m.name,12,22); } }
+}
+
+/* ============ Draw: camera ============ */
+const SCENE=(()=>{ const boxes=[];
+  [[-8,-8],[8,-8],[-8,8],[8,8],[-14,0],[14,0]].forEach(([x,z])=>boxes.push({min:[x-1,0,z-1],max:[x+1,9,z+1],tone:0}));
+  boxes.push({min:[-2,0,-1.5],max:[2,6,1.5],tone:1}); // the boss
+  boxes.push({min:[-1.2,6,-1],max:[1.2,7.4,1],tone:1});
+  return boxes; })();
+function camBasis(P,L){ let f=[L[0]-P[0],L[1]-P[1],L[2]-P[2]]; const fl=Math.hypot(...f)||1; f=f.map(x=>x/fl);
+  let r=[-f[2],0,f[0]]; /* right = cross(forward, up) */ const rl=Math.hypot(...r)||1; r=r.map(x=>x/rl);
+  const u=[r[1]*f[2]-r[2]*f[1], r[2]*f[0]-r[0]*f[2], r[0]*f[1]-r[1]*f[0]];
+  return {f,r,u}; }
+function drawCamera(cv,cc,accent){
+  const {g,w,h}=fit(cv); g.clearRect(0,0,w,h);
+  const v=sample(cc,state.t), P=[v[0],v[1],v[2]], L=[v[3],v[4],v[5]], fov=Math.min(120,Math.max(5,v[6]));
+  const B=camBasis(P,L), focal=(h/2)/Math.tan(rad(fov)/2), near=0.2;
+  const proj=X=>{ const d=[X[0]-P[0],X[1]-P[1],X[2]-P[2]]; const z=d[0]*B.f[0]+d[1]*B.f[1]+d[2]*B.f[2];
+    const x=d[0]*B.r[0]+d[1]*B.r[1]+d[2]*B.r[2], y=d[0]*B.u[0]+d[1]*B.u[1]+d[2]*B.u[2]; return {z,sx:w/2+x/z*focal,sy:h/2-y/z*focal}; };
+  // sky / ground split
+  g.fillStyle=COL["panel-2"]; g.fillRect(0,0,w,h);
+  // ground grid
+  g.strokeStyle=alpha(COL.muted,0.35); g.lineWidth=1;
+  for(let i=-24;i<=24;i+=4){ line3(g,proj,[i,0,-24],[i,0,24],near); line3(g,proj,[-24,0,i],[24,0,i],near); }
+  // boxes as shaded faces, far to near
+  const faces=[];
+  for(const b of SCENE){ const [x0,y0,z0]=b.min,[x1,y1,z1]=b.max;
+    const F=[[[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1],0.85],[[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],0.55],
+             [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],0.7],[[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0],0.62],[[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0],1.0]];
+    for(const f of F){ const pts=f.slice(0,4).map(proj); if(pts.some(p=>p.z<near)) continue;
+      const depth=pts.reduce((a,p)=>a+p.z,0)/4; faces.push({pts,depth,shade:f[4],tone:b.tone}); } }
+  faces.sort((a,b)=>b.depth-a.depth);
+  for(const f of faces){ g.beginPath(); f.pts.forEach((p,i)=>i?g.lineTo(p.sx,p.sy):g.moveTo(p.sx,p.sy)); g.closePath();
+    g.fillStyle = f.tone ? alpha(accent,0.35+0.55*f.shade) : alpha(COL.fg,0.12+0.3*f.shade); g.fill();
+    g.strokeStyle=alpha(COL.bg,0.6); g.lineWidth=1; g.stroke(); }
+  // letterbox bars
+  const bar=h*0.09; g.fillStyle="#000"; g.fillRect(0,0,w,bar); g.fillRect(0,h-bar,w,bar);
+  g.fillStyle="#9aa4b2"; g.font=`500 ${Math.max(10,w*0.026)}px monospace`; g.fillText(`FOV ${fov.toFixed(0)}`,10,h-bar/2+4);
+  drawMarkerFlash(g,w,h,cc);
+}
+function line3(g,proj,a,b,near){ let A=proj(a),Bp=proj(b);
+  if(A.z<near&&Bp.z<near) return;
+  if(A.z<near||Bp.z<near){ const k=(near-A.z)/(Bp.z-A.z); const m=[a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k,a[2]+(b[2]-a[2])*k];
+    if(A.z<near) A=proj(m.map((x,i)=>x+(b[i]-a[i])*1e-4)); else Bp=proj(m.map((x,i)=>x-(b[i]-a[i])*1e-4)); }
+  g.beginPath(); g.moveTo(A.sx,A.sy); g.lineTo(Bp.sx,Bp.sy); g.stroke(); }
+
+function drawMap(){
+  const cv=document.getElementById("map"); const {g,w,h}=fit(cv); g.clearRect(0,0,w,h);
+  const S=Math.min(w,h)/60, ox=w/2, oy=h/2, X=x=>ox+x*S, Z=z=>oy+z*S;
+  g.strokeStyle=alpha(COL.muted,0.25); for(let i=-28;i<=28;i+=4){ g.beginPath(); g.moveTo(X(i),Z(-28)); g.lineTo(X(i),Z(28)); g.stroke(); g.beginPath(); g.moveTo(X(-28),Z(i)); g.lineTo(X(28),Z(i)); g.stroke(); }
+  for(const b of SCENE){ g.fillStyle=b.tone?alpha(COL.smooth,0.5):alpha(COL.fg,0.25); g.fillRect(X(b.min[0]),Z(b.min[2]),(b.max[0]-b.min[0])*S,(b.max[2]-b.min[2])*S); }
+  const D=state.clip.duration;
+  const path=(cc,col,dash)=>{ g.strokeStyle=col; g.lineWidth=2; g.setLineDash(dash); g.beginPath();
+    for(let i=0;i<=200;i++){ const v=sample(cc,D*i/200); i?g.lineTo(X(v[0]),Z(v[2])):g.moveTo(X(v[0]),Z(v[2])); } g.stroke(); g.setLineDash([]); };
+  path(state.ccA,COL.choppy,[5,5]); path(state.ccB,COL.smooth,[]);
+  state.clip.keys.forEach((k,i)=>{ diamond(g,X(k.pos[0]),Z(k.pos[2]),i===state.sel?7:5,COL.key); });
+  const cam=(cc,col)=>{ const v=sample(cc,state.t); const a=Math.atan2(v[5]-v[2],v[3]-v[0]);
+    g.fillStyle=col; g.beginPath(); g.moveTo(X(v[0])+Math.cos(a)*10,Z(v[2])+Math.sin(a)*10);
+    g.lineTo(X(v[0])+Math.cos(a+2.5)*7,Z(v[2])+Math.sin(a+2.5)*7); g.lineTo(X(v[0])+Math.cos(a-2.5)*7,Z(v[2])+Math.sin(a-2.5)*7); g.closePath(); g.fill(); };
+  cam(state.ccA,COL.choppy); cam(state.ccB,COL.smooth);
+}
+function diamond(g,x,y,r,col){ g.fillStyle=col; g.beginPath(); g.moveTo(x,y-r); g.lineTo(x+r,y); g.lineTo(x,y+r); g.lineTo(x-r,y); g.closePath(); g.fill(); }
+
+/* ============ Draw: speed graphs + timeline ============ */
+function drawGraph(cv,curve,col){
+  const {g,w,h}=fit(cv); g.clearRect(0,0,w,h);
+  const pad=6, N=curve.sp.length-1, mx=curve.max||1, X=i=>pad+(w-2*pad)*i/N, Y=v=>h-pad-(h-2*pad)*v/mx;
+  g.fillStyle=alpha(col,0.16); g.beginPath(); g.moveTo(X(0),h-pad); curve.sp.forEach((v,i)=>g.lineTo(X(i),Y(v))); g.lineTo(X(N),h-pad); g.closePath(); g.fill();
+  g.strokeStyle=col; g.lineWidth=1.6; g.beginPath(); curve.sp.forEach((v,i)=>i?g.lineTo(X(i),Y(v)):g.moveTo(X(i),Y(v))); g.stroke();
+  g.fillStyle=COL.muted; curve.turns.forEach(f=>{ g.beginPath(); g.arc(X(f*N),h-pad-2,3,0,Math.PI*2); g.fill(); });
+  g.fillStyle=COL.choppy; curve.stops.forEach(f=>{ g.beginPath(); g.arc(X(f*N),h-pad-2,3.5,0,Math.PI*2); g.fill(); });
+  const f=localTime(state.ccB,state.t)/state.clip.duration; g.strokeStyle=COL.fg; g.lineWidth=1; g.beginPath(); g.moveTo(X(f*N),0); g.lineTo(X(f*N),h); g.stroke();
+}
+function drawTimeline(){
+  const cv=document.getElementById("timeline"); const {g,w,h}=fit(cv); g.clearRect(0,0,w,h);
+  const pad=16, D=state.clip.duration, X=t=>pad+(w-2*pad)*t/D;
+  // seconds ruler
+  g.strokeStyle=COL.line; g.fillStyle=COL.muted; g.font="10px monospace"; g.lineWidth=1;
+  const step=D>6?1:D>2.5?0.5:0.1;
+  for(let t=0;t<=D+1e-6;t+=step){ g.beginPath(); g.moveTo(X(t),0); g.lineTo(X(t),8); g.stroke(); if(step>=0.5||Math.abs(t*10%5)<1e-6) g.fillText(t.toFixed(step<1?1:0)+"s",X(t)+2,18); }
+  g.strokeStyle=COL.muted; g.beginPath(); g.moveTo(pad,38); g.lineTo(w-pad,38); g.stroke();
+  for(const m of state.clip.markers||[]){ g.fillStyle=COL.smooth; g.fillRect(X(m.t)-1,24,2,10); g.fillText(m.name,X(m.t)+3,32); }
+  state.clip.keys.forEach((k,i)=>diamond(g,X(k.t),38,i===state.sel?9:6.5,i===state.sel?COL.key:alpha(COL.key,0.7)));
+  const pt=localTime(state.ccB,state.t); g.strokeStyle=COL.fg; g.lineWidth=1.5; g.beginPath(); g.moveTo(X(pt),0); g.lineTo(X(pt),h); g.stroke();
+}
+
+/* ============ Easing tab ============ */
+let easeT0=performance.now();
+function drawCurve(){
+  const cv=document.getElementById("curve"); const {g,w,h}=fit(cv); g.clearRect(0,0,w,h);
+  const st=document.getElementById("curve-style").value, dr=document.getElementById("curve-dir").value;
+  const L=w*0.1, R=w*0.66, T=h*0.18, Bt=h*0.82, X=s=>L+(R-L)*s, Y=v=>Bt-(Bt-T)*v;
+  g.strokeStyle=COL.line; g.strokeRect(L,T,R-L,Bt-T);
+  g.strokeStyle=alpha(COL.muted,0.8); g.setLineDash([4,4]); g.beginPath(); g.moveTo(X(0),Y(0)); g.lineTo(X(1),Y(1)); g.stroke(); g.setLineDash([]);
+  g.strokeStyle=COL.key; g.lineWidth=2.5; g.beginPath(); for(let i=0;i<=200;i++){ const s=i/200; const v=ease(st,dr,s); i?g.lineTo(X(s),Y(v)):g.moveTo(X(s),Y(v)); } g.stroke(); g.lineWidth=1;
+  const cyc=1.6, p=((performance.now()-easeT0)/1000)%(cyc+0.6), s=Math.min(1,p/cyc), v=ease(st,dr,s);
+  g.fillStyle=COL.key; g.beginPath(); g.arc(X(s),Y(v),5,0,Math.PI*2); g.fill();
+  const bx=w*0.78, bw=w*0.14;
+  g.fillStyle=alpha(COL.muted,0.35); g.fillRect(bx-bw*0.55,Y(s)-10,bw*0.5,20);
+  g.fillStyle=COL.key; g.fillRect(bx+bw*0.05,Y(v)-10,bw*0.5,20);
+  g.fillStyle=COL.muted; g.font="11px monospace"; g.fillText("time →",R-44,Bt+16); g.save(); g.translate(L-10,T+50); g.rotate(-Math.PI/2); g.fillText("progress",0,0); g.restore();
+}
+
+/* ============ Editor UI ============ */
+const $=id=>document.getElementById(id);
+function fillSelect(sel,items,val){ sel.innerHTML=""; items.forEach(x=>{ const o=document.createElement("option"); o.value=o.textContent=x; sel.appendChild(o); }); if(val) sel.value=val; }
+fillSelect($("ease-style"),STYLES,"Sine"); fillSelect($("curve-style"),STYLES,"Sine");
+
+function buildChannels(){
+  const box=$("channels"); box.innerHTML=""; const k=state.clip.keys[state.sel];
+  const defs = state.clip.kind==="pose"
+    ? JOINTS.map(j=>({id:j,label:JOINT_LABEL[j],min:j==="RootY"?-3:-180,max:j==="RootY"?4:180,step:j==="RootY"?0.05:1,get:()=>k.pose[j],set:v=>k.pose[j]=v}))
+    : [["pos.x",0,0],["pos.y",0,1],["pos.z",0,2],["look.x",1,0],["look.y",1,1],["look.z",1,2]].map(([n,a,i])=>({id:n,label:n.replace("pos.","Camera ").replace("look.","Look at "),min:n.endsWith("y")?-2:-30,max:n.endsWith("y")?20:30,step:0.1,
+        get:()=>(a?k.look:k.pos)[i],set:v=>(a?k.look:k.pos)[i]=v})).concat([{id:"fov",label:"FOV",min:10,max:110,step:1,get:()=>k.fov??70,set:v=>k.fov=v}]);
+  const locked = state.clip.loop && state.sel===state.clip.keys.length-1;
+  defs.forEach(d=>{ const row=document.createElement("div"); row.className="chan"+(d.id===state.joint?" active":"");
+    const lab=document.createElement("span"); lab.textContent=d.label;
+    const rg=document.createElement("input"); rg.type="range"; rg.min=d.min; rg.max=d.max; rg.step=d.step; rg.value=d.get(); rg.setAttribute("aria-label",d.label); rg.disabled=locked; rg.id="ch-"+d.id;
+    const nm=document.createElement("input"); nm.type="number"; nm.min=d.min; nm.max=d.max; nm.step=d.step; nm.value=+(+d.get()).toFixed(2); nm.setAttribute("aria-label",d.label+" value"); nm.disabled=locked; nm.id="chn-"+d.id;
+    const apply=v=>{ v=parseFloat(v); if(!isFinite(v)) return; d.set(v); rg.value=v; nm.value=+v.toFixed(2); state.joint=d.id; rebuild(); };
+    rg.addEventListener("input",()=>apply(rg.value)); nm.addEventListener("change",()=>apply(nm.value));
+    row.append(lab,rg,nm); box.appendChild(row); });
+  $("key-label").textContent = `Editing key ${state.sel+1} of ${state.clip.keys.length} at ${k.t.toFixed(2)}s` + (locked?" — the last key of a loop copies the first, edit key 1 instead.":"");
+}
+function syncKeyUI(){
+  const c=state.clip, k=c.keys[state.sel], n=c.keys.length;
+  $("key-time").value=k.t.toFixed(2); $("key-time").disabled = state.sel===0||state.sel===n-1;
+  $("del-key").disabled = state.sel===0||state.sel===n-1||n<=2;
+  $("ease-style").value=k.ease.style; $("ease-dir").value=k.ease.direction;
+  $("duration").value=c.duration; $("loop").checked=!!c.loop;
+  buildChannels();
+}
+function loadClip(c,keepTime){ state.clip=c; state.sel=Math.min(state.sel,c.keys.length-1); if(!keepTime) state.t=0; rebuild(); syncKeyUI(); }
+
+function exportText(){
+  const c=clone(state.clip); c.mode=$("export-mode").value; c.version=1;
+  const ordered={version:1,kind:c.kind,duration:c.duration,mode:c.mode,loop:c.loop,keys:c.keys.map(k=>{
+    const o={t:+k.t.toFixed(3)};
+    if(c.kind==="camera"){ o.pos=k.pos.map(x=>+x.toFixed(2)); o.look=k.look.map(x=>+x.toFixed(2)); o.fov=+(k.fov??70).toFixed(1); }
+    else { o.pose={}; JOINTS.forEach(j=>o.pose[j]=+(+k.pose[j]).toFixed(j==="RootY"?2:1)); }
+    o.ease={style:k.ease.style,direction:k.ease.direction}; return o; }),markers:c.markers};
+  state.exportObj=ordered; $("out").value=toLuau(ordered);
+}
+function toLuau(o,ind=""){
+  const nx=ind+"\t";
+  if(Array.isArray(o)){ if(o.every(x=>typeof x!=="object")) return "{ "+o.map(x=>toLuau(x)).join(", ")+" }";
+    return "{\n"+o.map(x=>nx+toLuau(x,nx)).join(",\n")+",\n"+ind+"}"; }
+  if(o&&typeof o==="object"){ const ks=Object.keys(o); const flat=ks.every(k=>typeof o[k]!=="object");
+    if(flat&&ks.length<=6) return "{ "+ks.map(k=>`${k} = ${toLuau(o[k])}`).join(", ")+" }";
+    return "{\n"+ks.map(k=>`${nx}${k} = ${toLuau(o[k],nx)}`).join(",\n")+",\n"+ind+"}"; }
+  if(typeof o==="string") return JSON.stringify(o);
+  return String(o);
+}
+// Tiny Luau-table / JSON reader for pasted clips
+function parseClipText(text){
+  text=text.trim(); if(!text) throw new Error("Paste a clip first.");
+  if(text[0]==="{"&&/"\w+"\s*:/.test(text)) return JSON.parse(text);
+  let s=text.replace(/--\[\[[\s\S]*?\]\]/g,"").replace(/--[^\n]*/g,"");
+  const start=s.indexOf("{"); if(start<0) throw new Error("No { found."); s=s.slice(start);
+  let i=0; const ws=()=>{ while(i<s.length&&/[\s]/.test(s[i])) i++; };
+  function val(){ ws(); const ch=s[i];
+    if(ch==="{") return table();
+    if(ch==='"'||ch==="'"){ const q=ch; let j=i+1,out=""; while(j<s.length&&s[j]!==q){ if(s[j]==="\\"){j++;} out+=s[j]; j++; } i=j+1; return out; }
+    const m=/^(-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?|true|false|nil)/.exec(s.slice(i)); if(!m) throw new Error("Couldn't read the clip near: "+s.slice(i,i+20));
+    i+=m[0].length; return m[0]==="true"?true:m[0]==="false"?false:m[0]==="nil"?null:parseFloat(m[0]); }
+  function table(){ i++; const arr=[],obj={}; let isObj=false;
+    for(;;){ ws(); if(s[i]==="}"){ i++; break; }
+      const m=/^([A-Za-z_]\w*)\s*=/.exec(s.slice(i));
+      if(m){ i+=m[0].length; obj[m[1]]=val(); isObj=true; } else arr.push(val());
+      ws(); if(s[i]===","||s[i]===";") i++; }
+    return isObj?obj:arr; }
+  return val();
+}
+function msg(t,err){ const el=$("msg"); el.textContent=t; el.className="msg"+(err?" err":""); }
+async function copy(text){ try{ await navigator.clipboard.writeText(text); msg("Copied."); }
+  catch(e){ const ta=$("out"); ta.value=text; ta.focus(); ta.select(); msg("Copy blocked here. The text is selected: copy it by hand."); } }
+
+/* ============ Tabs, presets, events ============ */
+function setTab(tab){
+  state.tab=tab; ["pose","camera","ease"].forEach(t=>$("tab-"+t).setAttribute("aria-selected",String(t===tab)));
+  $("anim-area").hidden = tab==="ease"; $("ease-area").hidden = tab!=="ease";
+  if(tab==="ease"){ try{localStorage.setItem("sal-tab",tab);}catch(e){} return; }
+  $("map-dock").hidden = tab!=="camera"; $("track-field").hidden = tab==="camera";
+  document.querySelectorAll(".track-name").forEach(el=>el.textContent = tab==="camera"?"camera":$("track").selectedOptions[0].textContent.toLowerCase());
+  const presets = tab==="camera"?CAM_PRESETS:POSE_PRESETS;
+  fillSelect($("preset"),Object.keys(presets));
+  const saved=restore(tab); state.sel=0;
+  loadClip(saved||validate(clone(presets[Object.keys(presets)[0]])));
+  if(saved){ const o=document.createElement("option"); o.value=o.textContent="(your edit)"; $("preset").prepend(o); $("preset").value="(your edit)"; }
+}
+$("tab-pose").onclick=()=>setTab("pose"); $("tab-camera").onclick=()=>setTab("camera"); $("tab-ease").onclick=()=>setTab("ease");
+$("preset").onchange=e=>{ const p=(state.tab==="camera"?CAM_PRESETS:POSE_PRESETS)[e.target.value]; if(p){ state.sel=0; loadClip(validate(clone(p))); } };
+$("play").onclick=()=>{ state.playing=!state.playing; $("play").textContent=state.playing?"Pause":"Play";
+  if(state.playing&&!state.clip.loop&&state.t>=state.clip.duration) state.t=0; };
+$("speed").onchange=e=>state.speed=parseFloat(e.target.value);
+$("loop").onchange=e=>{ state.clip.loop=e.target.checked; rebuild(); syncKeyUI(); };
+$("track").onchange=e=>{ state.track=e.target.value; document.querySelectorAll(".track-name").forEach(el=>el.textContent=e.target.selectedOptions[0].textContent.toLowerCase()); rebuild(); };
+$("trail").onchange=e=>state.trail=e.target.checked;
+$("scrub").oninput=e=>{ state.t=state.clip.duration*e.target.value/1000; state.playing=false; $("play").textContent="Play"; };
+$("export-mode").onchange=exportText;
+$("ease-style").onchange=e=>{ state.clip.keys[state.sel].ease.style=e.target.value; rebuild(); };
+$("ease-dir").onchange=e=>{ state.clip.keys[state.sel].ease.direction=e.target.value; rebuild(); };
+$("duration").onchange=e=>{ const c=state.clip, nd=parseFloat(e.target.value); if(!(nd>=0.2)) { e.target.value=c.duration; return; }
+  const k=nd/c.duration; c.keys.forEach(x=>x.t*=k); (c.markers||[]).forEach(m=>m.t*=k); c.duration=nd; c.keys[c.keys.length-1].t=nd; state.t*=k; rebuild(); syncKeyUI(); };
+$("key-time").onchange=e=>{ const c=state.clip,i=state.sel,v=parseFloat(e.target.value);
+  const lo=c.keys[i-1].t+0.01, hi=c.keys[i+1].t-0.01; if(!isFinite(v)){ syncKeyUI(); return; }
+  c.keys[i].t=Math.min(hi,Math.max(lo,v)); rebuild(); syncKeyUI(); };
+$("add-key").onclick=()=>{ const c=state.clip, t=localTime(state.ccB,state.t);
+  if(c.keys.some(k=>Math.abs(k.t-t)<0.02)){ msg("There's already a key here. Move the playhead first.",true); return; }
+  const v=sample(state.ccB,t), k={t,ease:E()};
+  if(c.kind==="camera"){ k.pos=[v[0],v[1],v[2]]; k.look=[v[3],v[4],v[5]]; k.fov=v[6]; } else { k.pose={}; JOINTS.forEach((j,i)=>k.pose[j]=+v[i].toFixed(2)); }
+  let idx=c.keys.findIndex(x=>x.t>t); c.keys.splice(idx,0,k); state.sel=idx; rebuild(); syncKeyUI(); msg("Key added from the smooth curve at "+t.toFixed(2)+"s."); };
+$("del-key").onclick=()=>{ const c=state.clip; if(state.sel===0||state.sel===c.keys.length-1) return; c.keys.splice(state.sel,1); state.sel=Math.max(0,state.sel-1); rebuild(); syncKeyUI(); };
+$("copy-luau").onclick=()=>copy("local clip = "+toLuau(state.exportObj));
+$("copy-json").onclick=()=>copy(JSON.stringify(state.exportObj,null,1));
+$("load").onclick=()=>{ try{ const c=validate(parseClipText($("in").value));
+    if((c.kind==="camera")!==(state.tab==="camera")) setTab(c.kind==="camera"?"camera":"pose");
+    state.sel=0; loadClip(c); msg(`Loaded a ${c.kind} clip with ${c.keys.length} keys.`); }
+  catch(e){ msg(e.message||"Couldn't read that clip.",true); } };
+$("timeline").addEventListener("pointerdown",e=>{
+  const cv=$("timeline"), r=cv.getBoundingClientRect(), x=e.clientX-r.left, pad=16, D=state.clip.duration, X=t=>pad+(r.width-2*pad)*t/D;
+  let best=-1,bd=14; state.clip.keys.forEach((k,i)=>{ const d=Math.abs(X(k.t)-x); if(d<bd){bd=d;best=i;} });
+  if(best>=0){ state.sel=best; state.t=state.clip.keys[best].t; } else state.t=Math.min(D,Math.max(0,(x-pad)/(r.width-2*pad)*D));
+  state.playing=false; $("play").textContent="Play"; syncKeyUI(); });
+
+/* ============ Main loop ============ */
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.1,(now-last)/1000); last=now;
+  if(state.tab==="ease"){ drawCurve(); requestAnimationFrame(frame); return; }
+  if(state.playing){ state.t+=dt*state.speed;
+    if(!state.clip.loop&&state.t>state.clip.duration+0.6) state.t=0; } // replay non-loops after a short beat
+  const shown=state.clip.loop?state.t:Math.min(state.t,state.clip.duration);
+  const keep=state.t; state.t=shown;
+  const accentA=COL.choppy, accentB=COL.smooth;
+  if(state.clip.kind==="pose"){ drawPose($("view-a"),state.ccA,accentA); drawPose($("view-b"),state.ccB,accentB); }
+  else { drawCamera($("view-a"),state.ccA,accentA); drawCamera($("view-b"),state.ccB,accentB); drawMap(); }
+  drawGraph($("graph-a"),state.speedA,accentA); drawGraph($("graph-b"),state.speedB,accentB); drawTimeline();
+  const lt=localTime(state.ccB,shown); $("time").textContent=`${lt.toFixed(2)}s · f${Math.round(lt*60)} @60`;
+  if(document.activeElement!==$("scrub")) $("scrub").value=Math.round(1000*lt/state.clip.duration);
+  state.t=keep;
+  requestAnimationFrame(frame);
+}
+let startTab="pose"; try{ const s=localStorage.getItem("sal-tab"); if(s==="camera"||s==="ease"||s==="pose") startTab=s; }catch(e){}
+setTab(startTab==="ease"?"pose":startTab); if(startTab==="ease") setTab("ease");
+requestAnimationFrame(frame);
+</script>

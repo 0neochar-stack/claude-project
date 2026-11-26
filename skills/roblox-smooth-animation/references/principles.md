@@ -115,5 +115,5 @@ This is the workflow pro animators and Moon-Animator-style editors use.
 4. **Test in context.** Check it at real game speed, from the real camera, alongside the walk and run
    blend, on a low-end device.
 
-Check the speed graph in Smooth Anim Lab (`tools/smooth-anim-lab.html`). The **speed of a limb tip should only touch
+Check the speed graph in Smooth Anim Lab (`assets/smooth-anim-lab.html`, or https://claude.ai/artifact/95q4KqEYKx476hrD6PtSaU). The **speed of a limb tip should only touch
 zero where you meant it to stop.**

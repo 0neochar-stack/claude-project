@@ -29,7 +29,7 @@ only where it should (a wind-up, a hit, a landing, the end), and never pops or s
    the hit and the settle.
 2. **Block.** Key poses only: start, anticipation, contact, follow-through, settle.
    Timing table: `references/principles.md` §8.
-3. **Preview in Smooth Anim Lab** (`tools/smooth-anim-lab.html`, or the published link). Paste a clip,
+3. **Preview in Smooth Anim Lab** (open https://claude.ai/artifact/95q4KqEYKx476hrD6PtSaU, or the offline copy `assets/smooth-anim-lab.html`). Paste a clip,
    compare **Stop-and-go** with **Smooth**, and read the speed graph:
    - a **red dot** is a stutter: the motion stops and then carries on the same way. That's a bug.
    - a **grey dot** is a turn-around (wind-up into a swing). That's natural.
@@ -57,6 +57,7 @@ only where it should (a wind-up, a hit, a landing, the end), and never pops or s
 | `references/cutscenes.md` | Camera rules, shot types, letterbox, skip, actors, markers, shake, low-end tips |
 | `references/tweens-and-ui.md` | Tween rules, easing and duration tables, springs |
 | `references/troubleshooting.md` | Symptom → cause → fix |
+| `assets/smooth-anim-lab.html` | Smooth Anim Lab, offline copy (live: https://claude.ai/artifact/95q4KqEYKx476hrD6PtSaU) |
 | `luau/SmoothClip.luau` | Samples a clip (the same maths as the Lab) |
 | `luau/CutscenePlayer.luau` | Plays camera clips: one clock, render step, markers, restore |
 | `luau/PoseClipPlayer.luau` | Experimental: plays pose clips on R15 Motor6Ds for cutscene actors |
