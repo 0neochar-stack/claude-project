@@ -410,9 +410,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.003392416</X>
               <Y>0.019291266</Y>
-              <Z>0</Z>
+              <Z>-0.003546311</Z>
               <R00>0.988624967</R00>
               <R01>-0.024008741</R01>
               <R02>-0.148473081</R02>
@@ -784,9 +784,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.010155024</X>
               <Y>0.023241171</Y>
-              <Z>0</Z>
+              <Z>-0.007026652</Z>
               <R00>0.985623706</R00>
               <R01>-0.024861707</R01>
               <R02>-0.167116142</R02>
@@ -1158,9 +1158,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.014158055</X>
               <Y>0.021982486</Y>
-              <Z>0</Z>
+              <Z>-0.007170871</Z>
               <R00>0.984195184</R00>
               <R01>-0.02341112</R01>
               <R02>-0.175532786</R02>
@@ -1532,9 +1532,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.021597383</X>
               <Y>0.022917704</Y>
-              <Z>0</Z>
+              <Z>-0.000519523</Z>
               <R00>0.980240193</R00>
               <R01>-0.024405941</R01>
               <R02>-0.196299553</R02>
@@ -1906,9 +1906,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.026801491</X>
               <Y>0.021226732</Y>
-              <Z>0</Z>
+              <Z>0.007827387</Z>
               <R00>0.978476959</R00>
               <R01>-0.025958309</R01>
               <R02>-0.204716896</R02>
@@ -2280,9 +2280,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.031596492</X>
               <Y>0.018352935</Y>
-              <Z>0</Z>
+              <Z>0.021473129</Z>
               <R00>0.977147937</R00>
               <R01>-0.034288476</R01>
               <R02>-0.209776571</R02>
@@ -2654,9 +2654,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.036635153</X>
               <Y>0.011605765</Y>
-              <Z>0</Z>
+              <Z>0.040433073</Z>
               <R00>0.976183852</R00>
               <R01>-0.04166473</R01>
               <R02>-0.212906406</R02>
@@ -3028,9 +3028,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.041352847</X>
               <Y>-0.007488492</Y>
-              <Z>0</Z>
+              <Z>0.061167653</Z>
               <R00>0.976048759</R00>
               <R01>-0.041606029</R01>
               <R02>-0.213536317</R02>
@@ -3402,9 +3402,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.046484436</X>
               <Y>-0.080327195</Y>
-              <Z>0</Z>
+              <Z>0.10623532</Z>
               <R00>0.976436711</R00>
               <R01>-0.056242004</R01>
               <R02>-0.208346315</R02>
@@ -3776,9 +3776,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.048662877</X>
               <Y>-0.133728659</Y>
-              <Z>0</Z>
+              <Z>0.123224672</Z>
               <R00>0.978221228</R00>
               <R01>-0.0651973</R01>
               <R02>-0.197059739</R02>
@@ -4150,9 +4150,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.048241564</X>
               <Y>-0.187541079</Y>
-              <Z>0</Z>
+              <Z>0.13816303</Z>
               <R00>0.978944075</R00>
               <R01>-0.089947126</R01>
               <R02>-0.183243044</R02>
@@ -4524,9 +4524,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.043539841</X>
               <Y>-0.248810217</Y>
-              <Z>0</Z>
+              <Z>0.146891684</Z>
               <R00>0.980849356</R00>
               <R01>-0.107448635</R01>
               <R02>-0.162447937</R02>
@@ -4898,9 +4898,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.034748857</X>
               <Y>-0.30982813</Y>
-              <Z>0</Z>
+              <Z>0.148992764</Z>
               <R00>0.984734854</R00>
               <R01>-0.117773943</R01>
               <R02>-0.128166166</R02>
@@ -5272,9 +5272,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.024314516</X>
               <Y>-0.358922262</Y>
-              <Z>0</Z>
+              <Z>0.142945134</Z>
               <R00>0.987551339</R00>
               <R01>-0.13575194</R01>
               <R02>-0.079459195</R02>
@@ -5646,9 +5646,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.01254574</X>
               <Y>-0.390851346</Y>
-              <Z>0</Z>
+              <Z>0.126238848</Z>
               <R00>0.988670394</R00>
               <R01>-0.148090801</R01>
               <R02>-0.024494209</R02>
@@ -6020,9 +6020,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>0.001010712</X>
               <Y>-0.396948456</Y>
-              <Z>0</Z>
+              <Z>0.097472504</Z>
               <R00>0.98571223</R00>
               <R01>-0.161594341</R01>
               <R02>0.047525442</R02>
@@ -6394,9 +6394,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>0.015830185</X>
               <Y>-0.370221811</Y>
-              <Z>0</Z>
+              <Z>0.054730492</Z>
               <R00>0.976985334</R00>
               <R01>-0.162530064</R01>
               <R02>0.138143534</R02>
@@ -6768,9 +6768,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>0.035450067</X>
               <Y>-0.28663676</Y>
-              <Z>0</Z>
+              <Z>-0.010264457</Z>
               <R00>0.948642629</R00>
               <R01>-0.168511849</R01>
               <R02>0.267732924</R02>
@@ -7142,9 +7142,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>0.048792497</X>
               <Y>-0.15944712</Y>
-              <Z>0</Z>
+              <Z>-0.103305784</Z>
               <R00>0.861027162</R00>
               <R01>-0.171734511</R01>
               <R02>0.478685162</R02>
@@ -7516,9 +7516,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>0.043583908</X>
               <Y>-0.035907787</Y>
-              <Z>0</Z>
+              <Z>-0.220111528</Z>
               <R00>0.705236453</R00>
               <R01>-0.126148418</R01>
               <R02>0.69765903</R02>
@@ -7890,9 +7890,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>0.015344787</X>
               <Y>0.085911764</Y>
-              <Z>0</Z>
+              <Z>-0.335016658</Z>
               <R00>0.418060969</R00>
               <R01>-0.081984228</R01>
               <R02>0.904711895</R02>
@@ -8264,9 +8264,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.03589676</X>
               <Y>0.213541238</Y>
-              <Z>0</Z>
+              <Z>-0.428716452</Z>
               <R00>-0.01434663</R00>
               <R01>-0.058890339</R01>
               <R02>0.998161361</R02>
@@ -8638,9 +8638,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.073573782</X>
               <Y>0.401137896</Y>
-              <Z>0</Z>
+              <Z>-0.501077895</Z>
               <R00>-0.495285248</R00>
               <R01>-0.036482847</R01>
               <R02>0.867964011</R02>
@@ -9012,9 +9012,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.11605785</X>
               <Y>0.572251027</Y>
-              <Z>0</Z>
+              <Z>-0.577803773</Z>
               <R00>-0.832165724</R00>
               <R01>0.03125345</R01>
               <R02>0.553645582</R02>
@@ -9386,9 +9386,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.183186436</X>
               <Y>0.682470404</Y>
-              <Z>0</Z>
+              <Z>-0.637633479</Z>
               <R00>-0.983445777</R00>
               <R01>0.013965589</R01>
               <R02>0.180663682</R02>
@@ -9760,9 +9760,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.247822601</X>
               <Y>0.777861603</Y>
-              <Z>0</Z>
+              <Z>-0.668046657</Z>
               <R00>-0.9887666</R00>
               <R01>-0.013874989</R01>
               <R02>-0.148822362</R02>
@@ -10134,9 +10134,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.300539471</X>
               <Y>0.874996737</Y>
-              <Z>0</Z>
+              <Z>-0.670714747</Z>
               <R00>-0.88345342</R00>
               <R01>0.012771933</R01>
               <R02>-0.468344886</R02>
@@ -10508,9 +10508,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.336490533</X>
               <Y>0.921886848</Y>
-              <Z>0</Z>
+              <Z>-0.654011778</Z>
               <R00>-0.666900202</R00>
               <R01>0.038254339</R01>
               <R02>-0.744164448</R02>
@@ -10882,9 +10882,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.355861511</X>
               <Y>0.917617</Y>
-              <Z>0</Z>
+              <Z>-0.632058551</Z>
               <R00>-0.381836347</R00>
               <R01>0.023715961</R01>
               <R02>-0.923925623</R02>
@@ -11256,9 +11256,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.35667983</X>
               <Y>0.875775537</Y>
-              <Z>0</Z>
+              <Z>-0.612081801</Z>
               <R00>-0.089470897</R00>
               <R01>0.022039208</R01>
               <R02>-0.995745566</R02>
@@ -11630,9 +11630,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.340970432</X>
               <Y>0.80432507</Y>
-              <Z>0</Z>
+              <Z>-0.603143119</Z>
               <R00>0.18252864</R00>
               <R01>0.026413543</R01>
               <R02>-0.982845675</R02>
@@ -12004,9 +12004,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.316793475</X>
               <Y>0.706493975</Y>
-              <Z>0</Z>
+              <Z>-0.608090673</Z>
               <R00>0.411579354</R00>
               <R01>0.03398569</R01>
               <R02>-0.910740034</R02>
@@ -12378,9 +12378,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.289390544</X>
               <Y>0.559591387</Y>
-              <Z>0</Z>
+              <Z>-0.627846652</Z>
               <R00>0.595837996</R00>
               <R01>0.049174444</R01>
               <R02>-0.801597752</R02>
@@ -12752,9 +12752,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.266863869</X>
               <Y>0.430984289</Y>
-              <Z>0</Z>
+              <Z>-0.663458526</Z>
               <R00>0.733012198</R00>
               <R01>0.066030731</R01>
               <R02>-0.677002998</R02>
@@ -13126,9 +13126,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.255838152</X>
               <Y>0.309245096</Y>
-              <Z>0</Z>
+              <Z>-0.709531879</Z>
               <R00>0.830826322</R00>
               <R01>0.100373554</R01>
               <R02>-0.547405491</R02>
@@ -13500,9 +13500,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.249797152</X>
               <Y>0.151241954</Y>
-              <Z>0</Z>
+              <Z>-0.756381006</Z>
               <R00>0.895813061</R00>
               <R01>0.13395288</R01>
               <R02>-0.423763596</R02>
@@ -13874,9 +13874,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.252670575</X>
               <Y>0.019772108</Y>
-              <Z>0</Z>
+              <Z>-0.790537129</Z>
               <R00>0.936408021</R00>
               <R01>0.159968217</R01>
               <R02>-0.312330255</R02>
@@ -14248,9 +14248,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.280192695</X>
               <Y>-0.116173364</Y>
-              <Z>0</Z>
+              <Z>-0.801456286</Z>
               <R00>0.963293189</R00>
               <R01>0.128220171</R01>
               <R02>-0.235851268</R02>
@@ -14622,9 +14622,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.293770771</X>
               <Y>-0.18750946</Y>
-              <Z>0</Z>
+              <Z>-0.806418223</Z>
               <R00>0.967526502</R00>
               <R01>0.140867351</R01>
               <R02>-0.209878198</R02>
@@ -14996,9 +14996,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.316738938</X>
               <Y>-0.220835741</Y>
-              <Z>0</Z>
+              <Z>-0.807906276</Z>
               <R00>0.961613144</R00>
               <R01>0.155415369</R01>
               <R02>-0.226155308</R02>
@@ -15370,9 +15370,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.327704974</X>
               <Y>-0.22087028</Y>
-              <Z>0</Z>
+              <Z>-0.818837747</Z>
               <R00>0.964400733</R00>
               <R01>0.145592931</R01>
               <R02>-0.220757613</R02>
@@ -15744,9 +15744,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.326891936</X>
               <Y>-0.207630567</Y>
-              <Z>0</Z>
+              <Z>-0.828386479</Z>
               <R00>0.971414557</R00>
               <R01>0.118143775</R01>
               <R02>-0.205902423</R02>
@@ -16118,9 +16118,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.323104764</X>
               <Y>-0.172305532</Y>
-              <Z>0</Z>
+              <Z>-0.84821423</Z>
               <R00>0.977462153</R00>
               <R01>0.109191003</R01>
               <R02>-0.180679449</R02>
@@ -16492,9 +16492,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.310825755</X>
               <Y>-0.144388515</Y>
-              <Z>0</Z>
+              <Z>-0.871294861</Z>
               <R00>0.989097271</R00>
               <R01>0.097761753</R01>
               <R02>-0.110132771</R02>
@@ -16866,9 +16866,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.30240649</X>
               <Y>-0.115112297</Y>
-              <Z>0</Z>
+              <Z>-0.895981289</Z>
               <R00>0.995965588</R00>
               <R01>0.082122612</R01>
               <R02>-0.036172141</R02>
@@ -17240,9 +17240,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.297201979</X>
               <Y>-0.079904377</Y>
-              <Z>0</Z>
+              <Z>-0.915882079</Z>
               <R00>0.997468759</R00>
               <R01>0.069834476</R01>
               <R02>0.013387351</R02>
@@ -17614,9 +17614,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.29252283</X>
               <Y>-0.05669526</Y>
-              <Z>0</Z>
+              <Z>-0.93324452</Z>
               <R00>0.997193934</R00>
               <R01>0.065187906</R01>
               <R02>0.036807539</R02>
@@ -17988,9 +17988,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.28623477</X>
               <Y>-0.046531817</Y>
-              <Z>0</Z>
+              <Z>-0.948166261</Z>
               <R00>0.996418257</R00>
               <R01>0.069329153</R01>
               <R02>0.048416169</R02>
@@ -18362,9 +18362,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.278843217</X>
               <Y>-0.0452404</Y>
-              <Z>0</Z>
+              <Z>-0.963430249</Z>
               <R00>0.995920784</R00>
               <R01>0.071071789</R01>
               <R02>0.055593092</R02>
@@ -18736,9 +18736,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.26786912</X>
               <Y>-0.02608986</Y>
-              <Z>0</Z>
+              <Z>-0.984200899</Z>
               <R00>0.996825617</R00>
               <R01>0.055592252</R01>
               <R02>0.056992895</R02>
@@ -19110,9 +19110,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.250024464</X>
               <Y>-0.036270806</Y>
-              <Z>0</Z>
+              <Z>-1.011934008</Z>
               <R00>0.997160787</R00>
               <R01>0.033617209</R01>
               <R02>0.06738136</R02>
@@ -19484,9 +19484,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.226745305</X>
               <Y>-0.064691094</Y>
-              <Z>0</Z>
+              <Z>-1.043501642</Z>
               <R00>0.992508421</R00>
               <R01>0.04905579</R01>
               <R02>0.111895327</R02>
@@ -19858,9 +19858,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.202652444</X>
               <Y>-0.090170604</Y>
-              <Z>0</Z>
+              <Z>-1.066959883</Z>
               <R00>0.985810541</R00>
               <R01>0.060545401</R01>
               <R02>0.156562552</R02>
@@ -20232,9 +20232,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.186101355</X>
               <Y>-0.124483637</Y>
-              <Z>0</Z>
+              <Z>-1.08183949</Z>
               <R00>0.986912651</R00>
               <R01>0.009360515</R01>
               <R02>0.160983851</R02>
@@ -20606,9 +20606,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.174124029</X>
               <Y>-0.120520997</Y>
-              <Z>0</Z>
+              <Z>-1.092183208</Z>
               <R00>0.987224554</R00>
               <R01>0.024157356</R01>
               <R02>0.157493179</R02>
@@ -20980,9 +20980,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.169611529</X>
               <Y>-0.112690238</Y>
-              <Z>0</Z>
+              <Z>-1.097417656</Z>
               <R00>0.986949773</R00>
               <R01>0.023665957</R01>
               <R02>0.159279842</R02>
@@ -21354,9 +21354,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.171441489</X>
               <Y>-0.097398675</Y>
-              <Z>0</Z>
+              <Z>-1.097390016</Z>
               <R00>0.98619094</R00>
               <R01>0.022412226</R01>
               <R02>0.164088761</R02>
@@ -21728,9 +21728,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.178921713</X>
               <Y>-0.076282347</Y>
-              <Z>0</Z>
+              <Z>-1.094662652</Z>
               <R00>0.986201602</R00>
               <R01>0.021009405</R01>
               <R02>0.164210248</R02>
@@ -22102,9 +22102,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.191658096</X>
               <Y>-0.05982535</Y>
-              <Z>0</Z>
+              <Z>-1.085951907</Z>
               <R00>0.987085769</R00>
               <R01>0.015817017</R01>
               <R02>0.159409869</R02>
@@ -22476,9 +22476,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.207655124</X>
               <Y>-0.046045039</Y>
-              <Z>0</Z>
+              <Z>-1.072501315</Z>
               <R00>0.988534391</R00>
               <R01>0.015735734</R01>
               <R02>0.150173716</R02>
@@ -22850,9 +22850,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.226969773</X>
               <Y>-0.040188117</Y>
-              <Z>0</Z>
+              <Z>-1.05443367</Z>
               <R00>0.991030395</R00>
               <R01>0.010316328</R01>
               <R02>0.133237865</R02>
@@ -23224,9 +23224,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.248221651</X>
               <Y>-0.041059222</Y>
-              <Z>0</Z>
+              <Z>-1.032078681</Z>
               <R00>0.994221673</R00>
               <R01>0.003788742</R01>
               <R02>0.107279589</R02>
@@ -23598,9 +23598,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.270344287</X>
               <Y>-0.046757226</Y>
-              <Z>0</Z>
+              <Z>-1.004397812</Z>
               <R00>0.997060436</R00>
               <R01>0.00109678</R01>
               <R02>0.076611252</R02>
@@ -23972,9 +23972,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.288300006</X>
               <Y>-0.053309654</Y>
-              <Z>0</Z>
+              <Z>-0.972522351</Z>
               <R00>0.998665756</R00>
               <R01>-0.000411558</R01>
               <R02>0.051638527</R02>
@@ -24346,9 +24346,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.301504892</X>
               <Y>-0.055241548</Y>
-              <Z>0</Z>
+              <Z>-0.937400926</Z>
               <R00>0.999243859</R00>
               <R01>0.002628204</R01>
               <R02>0.038791788</R02>
@@ -24720,9 +24720,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.314562572</X>
               <Y>-0.056131385</Y>
-              <Z>0</Z>
+              <Z>-0.901802908</Z>
               <R00>0.999623242</R00>
               <R01>-0.001772944</R01>
               <R02>0.027390357</R02>
@@ -25094,9 +25094,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.32624319</X>
               <Y>-0.04219843</Y>
-              <Z>0</Z>
+              <Z>-0.867922677</Z>
               <R00>0.999734355</R00>
               <R01>-0.01784691</R01>
               <R02>0.014584488</R02>
@@ -25468,9 +25468,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.334652912</X>
               <Y>-0.017700962</Y>
-              <Z>0</Z>
+              <Z>-0.836072156</Z>
               <R00>0.999695377</R00>
               <R01>-0.024123908</R01>
               <R02>0.005214447</R02>
@@ -25842,9 +25842,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.339151511</X>
               <Y>-0.005393955</Y>
-              <Z>0</Z>
+              <Z>-0.805989824</Z>
               <R00>0.999466178</R00>
               <R01>-0.03126192</R01>
               <R02>-0.009489546</R02>
@@ -26216,9 +26216,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.339583234</X>
               <Y>0.005783707</Y>
-              <Z>0</Z>
+              <Z>-0.777776697</Z>
               <R00>0.998928378</R00>
               <R01>-0.037867207</R01>
               <R02>-0.026611459</R02>
@@ -26590,9 +26590,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.337696288</X>
               <Y>0.014296684</Y>
-              <Z>0</Z>
+              <Z>-0.752111183</Z>
               <R00>0.998493061</R00>
               <R01>-0.035900819</R01>
               <R02>-0.041505893</R02>
@@ -26964,9 +26964,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.331501434</X>
               <Y>0.02156843</Y>
-              <Z>0</Z>
+              <Z>-0.7275505</Z>
               <R00>0.998160926</R00>
               <R01>-0.033878951</R01>
               <R02>-0.050269095</R02>
@@ -27338,9 +27338,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.321483023</X>
               <Y>0.030605699</Y>
-              <Z>0</Z>
+              <Z>-0.702636367</Z>
               <R00>0.997736187</R00>
               <R01>-0.042588341</R01>
               <R02>-0.052045511</R02>
@@ -27712,9 +27712,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.31099879</X>
               <Y>0.028374155</Y>
-              <Z>0</Z>
+              <Z>-0.682767128</Z>
               <R00>0.998477865</R00>
               <R01>-0.027650343</R01>
               <R02>-0.047722227</R02>
@@ -28086,9 +28086,9 @@
           <Properties>
             <string name="Name">LowerTorso</string>
             <CoordinateFrame name="CFrame">
-              <X>0</X>
+              <X>-0.296623702</X>
               <Y>0.029973391</Y>
-              <Z>0</Z>
+              <Z>-0.661348969</Z>
               <R00>0.99861127</R00>
               <R01>-0.02936095</R01>
               <R02>-0.043743182</R02>

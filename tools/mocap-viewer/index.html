@@ -240,7 +240,7 @@ async function loadClip(i) {
     $("clip-title").textContent = meta.label; $("clip-sub").textContent = meta.note + " \u00b7 retargeted onto a standard R15 rig.";
     $("t-end").textContent = c.duration.toFixed(2) + "s";
     const ch = c.meta && c.meta.checks;
-    $("stats").innerHTML = ch ? `R15 vs mocap<br>bone match <b>${ch.bone_dir_error_median_deg}\u00b0</b> median \u00b7 ${ch.bone_dir_error_p95_deg}\u00b0 p95<br>feet on floor <b>${ch.lowest_foot_studs >= -0.05 ? "yes" : ch.lowest_foot_studs}</b> \u00b7 ${c.fps} fps \u00b7 ${c.frames.length} frames` : "";
+    $("stats").innerHTML = ch ? `${c.fps} fps \u00b7 ${c.frames.length} frames<br>planted-foot slide <b>${ch.foot_slip_planted_studs ?? "\u2013"} studs</b>` : "";
     setPlaying(true);
   } catch (err) { $("clip-title").textContent = "Couldn't load this clip"; $("clip-sub").textContent = "Reload the page to try again."; }
 }
