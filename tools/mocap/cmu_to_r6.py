@@ -274,6 +274,24 @@ def viewer_json(name, fps, frames, dbg, meta):
             "source": {"bones": [[ix[a], ix[b]] for a, b in bones], "frames": src}, "meta": meta}
 
 
+def clip_json(name, keyframes, loop, priority, meta):
+    """Compact clip for the Studio toolkit (tools/studio-toolkit/ClaudeKit.luau).
+
+    keys[i] = [time, {PartName: [x,y,z, qw,qx,qy,qz]}]   -- Pose CFrame (= Motor6D.Transform), quaternion w-first
+    expect[i] = {PartName: [x,y,z, qw,qx,qy,qz]}          -- part CFrame relative to HumanoidRootPart, from the
+                                                            classic R6 joint table; Studio compares against this
+    """
+    keys, expect = [], []
+    for t, tr in keyframes:
+        keys.append([round(t, 4), {p: [round(v, 5) for v in pos] + [round(v, 6) for v in q]
+                                  for p, (pos, q) in tr.items() if p != "HumanoidRootPart"}])
+        cfs = fk_r6(tr, ((0.0, 0.0, 0.0), m.QUAT_IDENTITY))
+        expect.append({p: [round(v, 4) for v in pos] + [round(v, 5) for v in q]
+                       for p, (pos, q) in cfs.items() if p != "HumanoidRootPart"})
+    return {"format": "claudekit-clip-1", "name": name, "rig": "R6", "loop": loop, "priority": priority,
+            "tree": POSE_TREE, "keys": keys, "expect": expect, "meta": meta}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("input")
@@ -301,6 +319,8 @@ def main():
             "studs_per_unit": round(dbg["scale"], 5), "checks": checks(frames, dbg)}
     with open(os.path.join(a.out_dir, name + ".R6.view.json"), "w") as fh:
         json.dump(viewer_json(name, a.fps, frames, dbg, meta), fh, separators=(",", ":"))
+    with open(os.path.join(a.out_dir, name + ".R6.clip.json"), "w") as fh:
+        json.dump(clip_json(name, [(k / a.fps, frames[k]) for k in kept], a.loop, a.priority, meta), fh, separators=(",", ":"))
     print(json.dumps(meta, indent=1))
 
 
