@@ -1,0 +1,422 @@
+<title>R6 Pocket Animator</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a phone animation app. 3D stage on top, a bottom sheet with timeline, transport and a tabbed inspector. Single dark look on purpose (studio tool). */
+:root {
+  --bg: #0d1117; --stage-top: #1b2331; --sheet: #141a23; --raised: #1c2430; --line: rgba(255,255,255,0.09);
+  --fg: #eef2f7; --muted: #8e9bb0; --accent: #ffb23e; --accent-ink: #1d1404; --select: #45d3c1; --danger: #ff6b5e;
+  --font-display: "Sora", "Segoe UI", system-ui, sans-serif; --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font-body); overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+body, button, input, select { -webkit-tap-highlight-color: transparent; }
+#app { position: fixed; inset: 0; display: grid; grid-template-rows: auto minmax(0,1fr) auto; grid-template-columns: minmax(0,1fr); }
+.sheet, #stage, .bar { min-width: 0; }
+.noselect { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* top bar */
+.bar { display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top, 0px) + 8px) max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px)); background: var(--sheet); border-bottom: 1px solid var(--line); z-index: 3; }
+.icon-btn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--raised); color: var(--fg); display: grid; place-items: center; cursor: pointer; flex: none; touch-action: manipulation; }
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn:disabled { opacity: 0.35; }
+#name { flex: 1 1 auto; min-width: 0; background: transparent; border: 0; color: var(--fg); font: 700 16px var(--font-display); padding: 6px 4px; border-radius: 8px; text-overflow: ellipsis; }
+#name:focus { background: var(--raised); outline: none; }
+.save { font: 500 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.save.ok::before { content: "● "; color: var(--select); }
+.save.local::before { content: "● "; color: var(--accent); }
+
+/* stage */
+#stage { position: relative; min-height: 0; background: radial-gradient(120% 90% at 50% 0%, var(--stage-top), var(--bg)); touch-action: none; overflow: hidden; }
+#stage canvas { display: block; width: 100%; height: 100%; }
+.stage-hint { position: absolute; left: 12px; bottom: 10px; font-size: 11.5px; color: var(--muted); pointer-events: none; }
+.part-tag { position: absolute; right: 12px; bottom: 10px; font: 600 12px var(--font-body); color: var(--select); background: rgba(13,17,23,0.7); border: 1px solid rgba(69,211,193,0.4); padding: 4px 9px; border-radius: 999px; pointer-events: none; }
+
+/* coach (tutorial) */
+.coach { position: absolute; left: 8px; right: 8px; top: 8px; background: rgba(20,26,35,0.94); border: 1px solid rgba(255,178,62,0.45); border-radius: 12px; padding: 8px 10px; display: grid; gap: 3px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); z-index: 4; max-width: 520px; margin: 0 auto; }
+.coach .step { font: 600 10.5px var(--font-mono); color: var(--accent); letter-spacing: 0.06em; text-transform: uppercase; }
+.coach .say { font-size: 13.5px; line-height: 1.35; }
+.coach .why { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.coach .row { display: flex; gap: 6px; justify-content: flex-end; }
+.coach .btn { padding: 5px 10px; font-size: 12px; border-radius: 8px; }
+.coach .row:has(#c-next[hidden]):has(#c-skip) { position: absolute; top: 6px; right: 8px; }
+.coach .row:has(#c-next[hidden]) .btn { padding: 3px 8px; font-size: 11px; }
+.coach .step { padding-right: 70px; }
+.coach.done { border-color: rgba(69,211,193,0.6); }
+
+/* sheet */
+.sheet { background: var(--sheet); border-top: 1px solid var(--line); padding: 8px max(10px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 8px) max(10px, env(safe-area-inset-left, 0px)); display: grid; gap: 8px; z-index: 3; }
+.timeline { position: relative; height: 58px; overflow-x: auto; overflow-y: hidden; border-radius: 10px; background: var(--raised); border: 1px solid var(--line); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.timeline::-webkit-scrollbar { display: none; }
+.track { position: relative; height: 100%; }
+.tick { position: absolute; top: 0; width: 1px; height: 9px; background: rgba(255,255,255,0.14); }
+.tick.major { height: 14px; background: rgba(255,255,255,0.28); }
+.tick-label { position: absolute; top: 14px; font: 500 9.5px var(--font-mono); color: var(--muted); transform: translateX(-50%); }
+.lane { position: absolute; left: 0; right: 0; top: 38px; height: 1px; background: rgba(255,255,255,0.12); }
+.key { position: absolute; top: 28px; width: 20px; height: 20px; margin-left: -10px; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.key i { width: 12px; height: 12px; transform: rotate(45deg); border-radius: 2px; background: var(--accent); box-shadow: 0 0 0 2px var(--raised); }
+.key.snap i { background: #ff8a5c; } .key.hold i { background: #b58cff; border-radius: 0; }
+.key.sel i { outline: 2px solid var(--fg); outline-offset: 2px; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--select); pointer-events: none; }
+.transport { display: flex; align-items: center; gap: 6px; }
+.play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; cursor: pointer; flex: none; touch-action: manipulation; }
+.play svg { width: 18px; height: 18px; }
+.tlabel { font: 500 12px var(--font-mono); color: var(--muted); min-width: 64px; }
+.spacer { flex: 1; }
+.seg { display: inline-flex; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 600 12.5px var(--font-body); padding: 6px 9px; border-radius: 8px; cursor: pointer; touch-action: manipulation; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--sheet); color: var(--fg); box-shadow: 0 0 0 1px var(--line); }
+.tabs { display: flex; gap: 6px; }
+.tabs button { flex: 1; border: 1px solid var(--line); background: transparent; color: var(--muted); font: 600 13px var(--font-body); padding: 8px; border-radius: 10px; cursor: pointer; touch-action: manipulation; }
+.tabs button[aria-selected="true"] { background: var(--raised); color: var(--fg); border-color: rgba(255,255,255,0.18); }
+.panel { display: grid; gap: 8px; max-height: 31vh; overflow-y: auto; overscroll-behavior: contain; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: transparent; color: var(--muted); font: 600 12.5px var(--font-body); padding: 7px 11px; border-radius: 999px; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
+.chip[aria-pressed="true"] { background: rgba(69,211,193,0.14); color: var(--select); border-color: rgba(69,211,193,0.45); }
+.slider { display: grid; grid-template-columns: 62px minmax(0,1fr) 46px; align-items: center; gap: 8px; }
+.slider span { font-size: 12.5px; color: var(--muted); }
+.slider output { font: 500 12px var(--font-mono); color: var(--fg); text-align: right; }
+input[type=range] { width: 100%; height: 30px; accent-color: var(--accent); font-size: 16px; touch-action: pan-x; }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--raised); color: var(--fg); font: 600 13px var(--font-body); padding: 9px 12px; border-radius: 10px; cursor: pointer; touch-action: manipulation; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: 0.4; }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+.lib-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); cursor: pointer; }
+.lib-item b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.lib-item small { color: var(--muted); font: 500 11px var(--font-mono); }
+.lib-item.cur { border-color: rgba(255,178,62,0.5); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.err { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; color: var(--muted); text-align: center; }
+@media (max-height: 700px) { .panel { max-height: 26vh; } .timeline { height: 52px; } .key { top: 24px; } .lane { top: 34px; } .play { width: 40px; height: 40px; } }
+@media (min-width: 900px) { #app { grid-template-columns: minmax(0,1fr) 400px; grid-template-rows: auto 1fr; } .bar { grid-column: 1 / -1; } .sheet { border-top: 0; border-left: 1px solid var(--line); align-content: start; } .panel { max-height: none; } }
+</style>
+
+<div id="app">
+  <div class="bar noselect">
+    <button class="icon-btn" id="b-lib" aria-label="My animations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+    <input id="name" value="My Animation" aria-label="Animation name" autocomplete="off" spellcheck="false">
+    <span class="save" id="save" aria-live="polite"></span>
+    <button class="icon-btn" id="b-help" aria-label="Tutorial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg></button>
+  </div>
+
+  <div id="stage" class="noselect" aria-label="3D character. Tap a body part to select it. Drag to turn the camera, pinch to zoom.">
+    <div class="coach" id="coach" hidden role="dialog" aria-live="polite">
+      <div class="step" id="c-step"></div>
+      <div class="say" id="c-say"></div>
+      <div class="why" id="c-why"></div>
+      <div class="row"><button class="btn" id="c-skip">Skip tutorial</button><button class="btn primary" id="c-next">Next</button></div>
+    </div>
+    <div class="stage-hint">Tap a body part · drag to turn · pinch to zoom</div>
+    <div class="part-tag" id="part-tag" hidden></div>
+  </div>
+
+  <div class="sheet noselect">
+    <div class="timeline" id="timeline" aria-label="Timeline. Tap to move the playhead, tap a diamond to select a key, drag a diamond to retime it."><div class="track" id="track"><div class="lane"></div><div class="playhead" id="playhead"></div></div></div>
+    <div class="transport">
+      <button class="icon-btn" id="b-undo" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button class="icon-btn" id="b-redo" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+      <button class="play" id="b-play" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" id="play-ico"><path d="M7 5l12 7-12 7z"/></svg></button>
+      <span class="tlabel" id="tlabel">0.00s</span>
+      <span class="spacer"></span>
+      <div class="seg" role="group" aria-label="Speed"><button data-speed="0.25">¼×</button><button data-speed="0.5">½×</button><button data-speed="1" aria-pressed="true">1×</button></div>
+      <button class="icon-btn" id="b-loop" aria-label="Loop" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/></svg></button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="pose" aria-selected="true">Pose</button>
+      <button role="tab" data-tab="key" aria-selected="false">Key</button>
+      <button role="tab" data-tab="start" aria-selected="false">Start</button>
+    </div>
+    <div class="panel" id="p-pose">
+      <div class="chips" id="part-chips"></div>
+      <div id="sliders" style="display:grid;gap:2px"></div>
+      <p class="note" id="pose-note">Moving a slider creates a key at the playhead if there isn't one.</p>
+    </div>
+    <div class="panel" id="p-key" hidden>
+      <div class="btns"><button class="btn primary" id="k-add">+ Key here</button><button class="btn" id="k-dup">Copy key to playhead</button><button class="btn" id="k-mirror">Mirror pose</button><button class="btn danger" id="k-del">Delete key</button></div>
+      <div><span class="note">Feel: how the motion leaves this key</span></div>
+      <div class="seg" role="group" aria-label="Feel" id="feel"><button data-feel="smooth">Smooth</button><button data-feel="snap">Snap</button><button data-feel="hold">Hold</button></div>
+      <p class="note" id="feel-note"></p>
+      <div class="btns"><button class="btn" id="k-ghost" aria-pressed="true">Ghosts: on</button></div>
+    </div>
+    <div class="panel" id="p-start" hidden>
+      <span class="note">Start a new animation from a pose:</span>
+      <div class="chips" id="starters"></div>
+      <span class="note" style="margin-top:4px">My animations</span>
+      <div id="library" style="display:grid;gap:6px"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="r6core.js"></script>
+<script>
+"use strict";
+if (!window.THREE || !window.R6) { document.body.insertAdjacentHTML("beforeend", '<div class="err">The animator didn\'t load. Check your connection and reload.</div>'); throw new Error("deps"); }
+const $ = id => document.getElementById(id);
+
+/* ================= data ================= */
+const LABEL = { Torso: "Torso", Head: "Head", "Right Arm": "R Arm", "Left Arm": "L Arm", "Right Leg": "R Leg", "Left Leg": "L Leg" };
+// sliders per part: [label, channel, sign, min, max, step]  (sign maps the friendly direction onto the stored axis)
+const SLIDERS = {
+  Torso: [["Lean", "x", -1, -45, 70, 1], ["Turn", "y", 1, -90, 90, 1], ["Tilt", "z", 1, -40, 40, 1], ["Height", "h", 1, -1.5, 3, 0.05]],
+  Head: [["Nod", "x", -1, -50, 60, 1], ["Turn", "y", 1, -80, 80, 1], ["Tilt", "z", 1, -35, 35, 1]],
+  "Right Arm": [["Swing", "x", 1, -120, 180, 1], ["Raise", "z", 1, -20, 180, 1], ["Twist", "y", 1, -90, 90, 1]],
+  "Left Arm": [["Swing", "x", 1, -120, 180, 1], ["Raise", "z", -1, -20, 180, 1], ["Twist", "y", 1, -90, 90, 1]],
+  "Right Leg": [["Swing", "x", 1, -70, 120, 1], ["Spread", "z", 1, -15, 60, 1], ["Twist", "y", 1, -60, 60, 1]],
+  "Left Leg": [["Swing", "x", 1, -70, 120, 1], ["Spread", "z", -1, -15, 60, 1], ["Twist", "y", 1, -60, 60, 1]],
+};
+const P = o => { const p = {}; for (const k of R6.PARTS) p[k] = Object.assign({ x: 0, y: 0, z: 0 }, o[k] || {}); p.Torso.h = (o.Torso && o.Torso.h) || 0; return p; };
+const STARTERS = {
+  "Idle": P({ "Right Arm": { z: 6 }, "Left Arm": { z: -6 } }),
+  "Fight stance": P({ Torso: { y: -18, h: -0.2, x: -6 }, Head: { y: 15 }, "Right Arm": { x: 70, z: 12, y: -10 }, "Left Arm": { x: 85, z: -18 }, "Right Leg": { x: -14, z: 6 }, "Left Leg": { x: 18, z: -6 } }),
+  "Arms up": P({ "Right Arm": { z: 170 }, "Left Arm": { z: -170 }, Head: { x: 15 } }),
+  "Crouch": P({ Torso: { x: -22, h: -0.75 }, "Right Arm": { x: 30, z: 10 }, "Left Arm": { x: 30, z: -10 }, "Right Leg": { x: 40, z: 6 }, "Left Leg": { x: 40, z: -6 } }),
+  "Run": P({ Torso: { x: -10 }, "Right Arm": { x: -45, z: 6 }, "Left Arm": { x: 50, z: -6 }, "Right Leg": { x: 35 }, "Left Leg": { x: -30 } }),
+  "T-pose": P({ "Right Arm": { z: 90 }, "Left Arm": { z: -90 } }),
+};
+const FEEL_NOTE = { smooth: "Smooth: glides through the key without stopping. Best for most motion.", snap: "Snap: shoots out fast, then settles. Use it on the key BEFORE a punch or slash.", hold: "Hold: freezes on this pose, then jumps to the next. Good for comic beats, rarely for fighting." };
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+const state = { anim: null, t: 0, playing: false, speed: 1, part: null, selKey: 0, ghosts: true, tab: "pose", playedOnce: false };
+const undoStack = [], redoStack = [];
+function newAnim(name, pose) { return { id: uid(), name: name || "My Animation", loop: true, format: "r6anim-1", keys: [{ t: 0, feel: "smooth", pose: R6.clonePose(pose || STARTERS.Idle) }], createdAt: new Date().toISOString() }; }
+const endTime = () => { const k = state.anim.keys; return k.length ? k[k.length - 1].t : 0; };
+const keyAt = t => state.anim.keys.findIndex(k => Math.abs(k.t - t) < 0.02);
+function snapshot() { undoStack.push(JSON.stringify(state.anim)); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; syncUndo(); }
+function syncUndo() { $("b-undo").disabled = !undoStack.length; $("b-redo").disabled = !redoStack.length; }
+
+/* ================= 3D ================= */
+const stage = $("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputEncoding = THREE.sRGBEncoding;
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+scene.add(new THREE.HemisphereLight(0xc9d8f0, 0x141820, 0.55));
+const key = new THREE.DirectionalLight(0xfff4e6, 0.85); key.position.set(-6, 14, -8); key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
+Object.assign(key.shadow.camera, { left: -6, right: 6, top: 8, bottom: -4 }); scene.add(key);
+const rim = new THREE.DirectionalLight(0x7fd8ff, 0.35); rim.position.set(8, 6, 10); scene.add(rim);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(20, 64), new THREE.MeshStandardMaterial({ color: 0x161c26, roughness: 0.95 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const grid = new THREE.GridHelper(30, 30, 0x2b3445, 0x1e2532); grid.position.y = 0.002; scene.add(grid);
+const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 3), new THREE.MeshBasicMaterial({ color: 0xffb23e })); arrow.rotation.x = -Math.PI / 2; arrow.position.set(0, 0.01, -2.2); scene.add(arrow);
+
+const COLORS = { Torso: 0x23706a, Head: 0xd9a77f, "Right Arm": 0xd9a77f, "Left Arm": 0xd9a77f, "Right Leg": 0x26344a, "Left Leg": 0x26344a };
+function makeRig(ghost) {
+  const g = new THREE.Group(), parts = {};
+  for (const name of R6.PARTS) {
+    const s = name === "Head" ? [1.25, 1.25, 1.25] : R6.SIZES[name];
+    const geo = new THREE.BoxGeometry(s[0] * 0.98, s[1] * 0.98, s[2] * 0.98);
+    const mat = ghost ? new THREE.MeshBasicMaterial({ color: ghost, transparent: true, opacity: 0.16, depthWrite: false })
+      : new THREE.MeshStandardMaterial({ color: COLORS[name], roughness: 0.55, metalness: 0.05, emissive: 0x000000 });
+    const mesh = new THREE.Mesh(geo, mat); mesh.userData.part = name;
+    if (!ghost) { mesh.castShadow = true; mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 })));
+      if (name === "Head") for (const x of [-0.2, 0.2]) { const eye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.02), new THREE.MeshBasicMaterial({ color: 0x1a1a1a })); eye.position.set(x, 0.08, -0.63); mesh.add(eye); } }
+    else mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: ghost, transparent: true, opacity: 0.45 })));
+    g.add(mesh); parts[name] = mesh;
+  }
+  scene.add(g); return { g, parts };
+}
+const rig = makeRig(null), ghostPrev = makeRig(0xff8a5c), ghostNext = makeRig(0x45d3c1);
+function applyPose(r, pose) { const cfs = R6.fk(pose); for (const n of R6.PARTS) { const [p, q] = cfs[n]; r.parts[n].position.set(p[0], p[1], p[2]); r.parts[n].quaternion.set(q[1], q[2], q[3], q[0]); } }
+function highlight() { for (const n of R6.PARTS) rig.parts[n].material.emissive.setHex(n === state.part ? 0x1f6f66 : 0x000000);
+  $("part-tag").hidden = !state.part; $("part-tag").textContent = state.part || ""; }
+
+// camera: one-finger drag orbits, tap selects, pinch zooms
+const orbit = { yaw: 0.45, pitch: 0.22, dist: 11, target: new THREE.Vector3(0, 2.7, 0) };
+function placeCamera() { const d = orbit.dist; camera.position.set(Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * d, orbit.target.y + Math.sin(orbit.pitch) * d, -Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * d); camera.lookAt(orbit.target); }
+const ptrs = new Map(); let pinch0 = 0, dist0 = 0, downAt = null, moved = 0;
+const canvas = renderer.domElement;
+canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 1) { downAt = [e.clientX, e.clientY]; moved = 0; }
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = orbit.dist; moved = 99; } });
+canvas.addEventListener("pointermove", e => { if (!ptrs.has(e.pointerId)) return; const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size === 1) { moved += Math.abs(e.clientX - prev[0]) + Math.abs(e.clientY - prev[1]); if (moved > 6) { orbit.yaw -= (e.clientX - prev[0]) * 0.009; orbit.pitch = Math.max(-0.15, Math.min(1.3, orbit.pitch + (e.clientY - prev[1]) * 0.006)); } }
+  else if (ptrs.size === 2 && pinch0) { const [a, b] = [...ptrs.values()]; orbit.dist = Math.max(5, Math.min(24, dist0 * pinch0 / Math.hypot(a[0] - b[0], a[1] - b[1]))); } });
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+canvas.addEventListener("pointerup", e => { const wasTap = ptrs.size === 1 && moved <= 6; ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0;
+  if (!wasTap) return; const r = canvas.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera); const hit = ray.intersectObjects(Object.values(rig.parts), false)[0]; selectPart(hit ? hit.object.userData.part : null); });
+canvas.addEventListener("pointercancel", e => { ptrs.delete(e.pointerId); pinch0 = 0; });
+canvas.addEventListener("wheel", e => { e.preventDefault(); orbit.dist = Math.max(5, Math.min(24, orbit.dist * (1 + Math.sign(e.deltaY) * 0.08))); }, { passive: false });
+function resize() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w < h ? 50 : 40;
+  orbit.dist = Math.max(orbit.dist, w < h ? 12 : 10);
+  // when the tutorial card is showing, slide the view down so the character sits below it
+  const c = $("coach"), coachH = c.hidden ? 0 : c.getBoundingClientRect().height + 8;
+  if (coachH) camera.setViewOffset(w, h, 0, -coachH * 0.5, w, h); else camera.clearViewOffset();
+  camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(stage);
+
+/* ================= timeline ================= */
+const PX = 110; // pixels per second
+function renderTimeline() {
+  const track = $("track"), end = endTime(), span = Math.max(end + 0.75, 2.5), w = span * PX + 32;
+  track.style.width = w + "px";
+  track.querySelectorAll(".tick,.tick-label,.key").forEach(n => n.remove());
+  for (let t = 0; t <= span + 1e-6; t += 0.1) { const x = 16 + t * PX, major = Math.abs(t * 2 - Math.round(t * 2)) < 1e-6;
+    const d = document.createElement("div"); d.className = "tick" + (major ? " major" : ""); d.style.left = x + "px"; track.appendChild(d);
+    if (major) { const l = document.createElement("div"); l.className = "tick-label"; l.style.left = x + "px"; l.textContent = t.toFixed(1) + "s"; track.appendChild(l); } }
+  state.anim.keys.forEach((k, i) => { const d = document.createElement("div"); d.className = "key " + (k.feel || "smooth") + (i === state.selKey && keyAt(state.t) === i ? " sel" : "");
+    d.style.left = (16 + k.t * PX) + "px"; d.dataset.i = i; d.setAttribute("role", "button"); d.setAttribute("aria-label", `Key ${i + 1} at ${k.t.toFixed(2)} seconds`); d.innerHTML = "<i></i>"; track.appendChild(d); });
+  updatePlayhead();
+}
+function updatePlayhead() { $("playhead").style.left = (16 + state.t * PX) + "px"; $("tlabel").textContent = state.t.toFixed(2) + "s"; }
+const tl = $("timeline"); let drag = null;
+tl.addEventListener("pointerdown", e => {
+  const keyEl = e.target.closest(".key"), r = $("track").getBoundingClientRect();
+  if (keyEl) { const i = +keyEl.dataset.i; drag = { i, x0: e.clientX, moved: false }; keyEl.setPointerCapture(e.pointerId); return; }
+  drag = { scrub: true, x0: e.clientX, moved: false, r };
+});
+tl.addEventListener("pointermove", e => {
+  if (!drag) return; if (Math.abs(e.clientX - drag.x0) > 6) drag.moved = true;
+  if (drag.i !== undefined && drag.moved && drag.i > 0) { const keys = state.anim.keys, r = $("track").getBoundingClientRect();
+    if (!drag.snapped) { snapshot(); drag.snapped = true; }
+    const t = Math.round(((e.clientX - r.left - 16) / PX) * 20) / 20, lo = keys[drag.i - 1].t + 0.05, hi = drag.i < keys.length - 1 ? keys[drag.i + 1].t - 0.05 : 30;
+    keys[drag.i].t = Math.max(lo, Math.min(hi, t)); state.t = keys[drag.i].t; state.selKey = drag.i; renderTimeline(); changed(false); }
+});
+tl.addEventListener("pointerup", e => {
+  if (!drag) return; const r = $("track").getBoundingClientRect();
+  if (drag.i !== undefined && !drag.moved) { state.selKey = drag.i; state.t = state.anim.keys[drag.i].t; stop(); renderTimeline(); syncPanels(); }
+  else if (drag.scrub && !drag.moved) { state.t = Math.max(0, Math.round(((e.clientX - r.left - 16) / PX) * 20) / 20); const k = keyAt(state.t); if (k >= 0) { state.selKey = k; state.t = state.anim.keys[k].t; } stop(); renderTimeline(); syncPanels(); }
+  drag = null; });
+
+/* ================= editing ================= */
+function currentPose() { return R6.sample(state.anim, state.t); }
+function ensureKeyAtPlayhead() { let i = keyAt(state.t); if (i >= 0) return i;
+  const k = { t: Math.round(state.t * 100) / 100, feel: "smooth", pose: P(currentPose()) }; const keys = state.anim.keys; i = keys.findIndex(x => x.t > k.t); if (i < 0) i = keys.length; keys.splice(i, 0, k); state.selKey = i; return i; }
+function selectPart(p) { state.part = p; highlight(); renderPartChips(); renderSliders(); setTab("pose"); tutorialCheck(); }
+function renderPartChips() { const box = $("part-chips"); box.innerHTML = ""; for (const p of R6.PARTS) { const b = document.createElement("button"); b.className = "chip"; b.textContent = LABEL[p]; b.setAttribute("aria-pressed", String(p === state.part)); b.onclick = () => selectPart(p); box.appendChild(b); } }
+function renderSliders() {
+  const box = $("sliders"); box.innerHTML = ""; if (!state.part) { box.innerHTML = '<p class="note">Tap a body part (or a chip above) to pose it.</p>'; return; }
+  const pose = currentPose()[state.part] || {};
+  for (const [label, ch, sign, mn, mx, step] of SLIDERS[state.part]) {
+    const row = document.createElement("label"); row.className = "slider";
+    const sp = document.createElement("span"); sp.textContent = label;
+    const inp = document.createElement("input"); inp.type = "range"; inp.min = mn; inp.max = mx; inp.step = step; inp.value = (pose[ch] || 0) * sign; inp.id = "s-" + ch; inp.setAttribute("aria-label", LABEL[state.part] + " " + label);
+    const out = document.createElement("output"); const fmt = v => ch === "h" ? (+v).toFixed(2) : Math.round(v) + "°"; out.textContent = fmt(inp.value);
+    let began = false;
+    inp.addEventListener("pointerdown", () => { snapshot(); began = true; });
+    inp.addEventListener("input", () => { if (!began) { snapshot(); began = true; } stop(); const i = ensureKeyAtPlayhead(); const pp = state.anim.keys[i].pose; pp[state.part] = pp[state.part] || { x: 0, y: 0, z: 0 };
+      pp[state.part][ch] = (+inp.value) * sign; out.textContent = fmt(inp.value); renderTimeline(); changed(true); });
+    inp.addEventListener("change", () => { began = false; tutorialCheck(); });
+    row.append(sp, inp, out); box.appendChild(row);
+  }
+}
+function syncPanels() { renderSliders(); const i = keyAt(state.t); const k = i >= 0 ? state.anim.keys[i] : null;
+  document.querySelectorAll("#feel button").forEach(b => { b.setAttribute("aria-pressed", String(!!k && b.dataset.feel === (k.feel || "smooth"))); b.disabled = !k; });
+  $("feel-note").textContent = k ? FEEL_NOTE[k.feel || "smooth"] : "Move the playhead onto a key (diamond) to change its feel.";
+  $("k-del").disabled = !k || state.anim.keys.length <= 1; $("k-mirror").disabled = false; $("k-dup").disabled = !(state.anim.keys[state.selKey]) || (k && i === state.selKey); }
+function setTab(t) { state.tab = t; document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t))); for (const n of ["pose", "key", "start"]) $("p-" + n).hidden = n !== t; if (t === "start") renderLibrary(); syncPanels(); }
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+document.querySelectorAll("#feel button").forEach(b => b.onclick = () => { const i = keyAt(state.t); if (i < 0) return; snapshot(); state.anim.keys[i].feel = b.dataset.feel; renderTimeline(); syncPanels(); changed(true); tutorialCheck(); });
+$("k-add").onclick = () => { snapshot(); ensureKeyAtPlayhead(); renderTimeline(); syncPanels(); changed(true); tutorialCheck(); };
+$("k-dup").onclick = () => { const src = state.anim.keys[state.selKey]; if (!src) return; snapshot(); const i = ensureKeyAtPlayhead(); state.anim.keys[i].pose = R6.clonePose(src.pose); state.anim.keys[i].feel = src.feel; renderTimeline(); syncPanels(); changed(true); };
+$("k-mirror").onclick = () => { snapshot(); const i = ensureKeyAtPlayhead(); state.anim.keys[i].pose = P(R6.mirror(state.anim.keys[i].pose)); renderTimeline(); syncPanels(); changed(true); };
+$("k-del").onclick = () => { const i = keyAt(state.t); if (i < 0 || state.anim.keys.length <= 1) return; snapshot(); state.anim.keys.splice(i, 1); if (i === 0) { const d = state.anim.keys[0].t; state.anim.keys.forEach(k => k.t = +(k.t - d).toFixed(3)); } state.selKey = Math.max(0, i - 1); renderTimeline(); syncPanels(); changed(true); };
+$("k-ghost").onclick = () => { state.ghosts = !state.ghosts; $("k-ghost").textContent = "Ghosts: " + (state.ghosts ? "on" : "off"); $("k-ghost").setAttribute("aria-pressed", String(state.ghosts)); };
+$("b-undo").onclick = () => { if (!undoStack.length) return; redoStack.push(JSON.stringify(state.anim)); state.anim = JSON.parse(undoStack.pop()); afterLoad(true); changed(true); };
+$("b-redo").onclick = () => { if (!redoStack.length) return; undoStack.push(JSON.stringify(state.anim)); state.anim = JSON.parse(redoStack.pop()); afterLoad(true); changed(true); };
+
+/* ================= playback ================= */
+const PLAY = '<path d="M7 5l12 7-12 7z"/>', PAUSE = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+function stop() { if (!state.playing) return; state.playing = false; $("play-ico").innerHTML = PLAY; $("b-play").setAttribute("aria-label", "Play"); }
+$("b-play").onclick = () => { if (state.playing) { stop(); syncPanels(); return; } if (state.anim.keys.length < 2) { flash("Add a second key first: move the playhead, then change a pose."); return; }
+  if (state.t >= endTime() - 1e-3) state.t = 0; state.playing = true; $("play-ico").innerHTML = PAUSE; $("b-play").setAttribute("aria-label", "Pause"); };
+document.querySelectorAll("[data-speed]").forEach(b => b.onclick = () => { state.speed = +b.dataset.speed; document.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); });
+$("b-loop").onclick = () => { snapshot(); state.anim.loop = !state.anim.loop; $("b-loop").setAttribute("aria-pressed", String(state.anim.loop)); $("b-loop").style.color = state.anim.loop ? "var(--accent)" : ""; changed(true); };
+function flash(msg) { $("pose-note").textContent = msg; setTab("pose"); setTimeout(() => { $("pose-note").textContent = "Moving a slider creates a key at the playhead if there isn't one."; }, 3500); }
+
+/* ================= saving: db (Claude can read it) + local backup ================= */
+let db = null, saveTimer = null, lib = [];
+function setSave(text, cls) { const s = $("save"); s.textContent = text; s.className = "save " + (cls || ""); }
+function localAll() { try { return JSON.parse(localStorage.getItem("r6anim-all") || "{}"); } catch (e) { return {}; } }
+function localPut(a) { try { const all = localAll(); all[a.id] = a; localStorage.setItem("r6anim-all", JSON.stringify(all)); localStorage.setItem("r6anim-last", a.id); } catch (e) {} }
+function changed(save) { state.anim.updatedAt = new Date().toISOString(); syncUndo(); if (!save) return; setSave("Saving…"); clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveTimer = null; saveNow(); }, 700); }
+async function saveNow() {
+  const a = state.anim; a.name = ($("name").value || "My Animation").slice(0, 60); localPut(a);
+  if (!db) { setSave("Saved on this device", "local"); return; }
+  try { await db.collection("animations").doc(a.id).set(JSON.parse(JSON.stringify(a))); setSave("Saved", "ok"); }
+  catch (e) { setSave("Saved on this device", "local"); }
+}
+$("name").addEventListener("change", () => { snapshot(); changed(true); });
+// never lose the last edit when the app is closed or switched away
+const flush = () => { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; saveNow(); } };
+document.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
+window.addEventListener("pagehide", flush);
+$("name").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+function renderLibrary() {
+  const box = $("library"); box.innerHTML = ""; const items = mergedLibrary();
+  if (!items.length) { const p = document.createElement("p"); p.className = "note"; p.textContent = "Nothing saved yet. Your animations show up here."; box.appendChild(p); return; }
+  for (const a of items) { const d = document.createElement("div"); d.className = "lib-item" + (a.id === state.anim.id ? " cur" : ""); d.setAttribute("role", "button");
+    const b = document.createElement("b"); b.textContent = a.name || "Untitled"; const s = document.createElement("small"); s.textContent = `${(a.keys || []).length} keys · ${((a.keys || []).slice(-1)[0] || { t: 0 }).t.toFixed(1)}s`;
+    d.append(b, s); d.onclick = () => openAnim(a); box.appendChild(d); }
+}
+function mergedLibrary() { const all = localAll(); for (const a of lib) all[a.id] = (!all[a.id] || (a.updatedAt || "") >= (all[a.id].updatedAt || "")) ? a : all[a.id];
+  return Object.values(all).sort((x, y) => (y.updatedAt || "").localeCompare(x.updatedAt || "")); }
+function openAnim(a) { state.anim = JSON.parse(JSON.stringify(a)); undoStack.length = 0; redoStack.length = 0; afterLoad(false); try { localStorage.setItem("r6anim-last", a.id); } catch (e) {} }
+$("b-lib").onclick = () => setTab("start");
+function renderStarters() { const box = $("starters"); box.innerHTML = ""; for (const name of Object.keys(STARTERS)) { const b = document.createElement("button"); b.className = "chip"; b.textContent = name;
+  b.onclick = () => { if (state.anim.keys.length > 1 || state.anim.updatedAt) saveNow(); state.anim = newAnim(name === "Idle" ? "My Animation" : name + " animation", STARTERS[name]); state.anim.fromStarter = name; undoStack.length = 0; redoStack.length = 0; afterLoad(false); changed(false); saveNow(); setTab("pose"); tutorialCheck(); };
+  box.appendChild(b); } }
+async function connectDb() {
+  const timer = setTimeout(() => { if (!db) setSave("Saved on this device", "local"); }, 10000);
+  try { db = await window.claude?.use?.("db"); } catch (e) { db = null; }
+  if (!db) { clearTimeout(timer); setSave("Saved on this device", "local"); return; }
+  db.collection("animations").orderBy("updatedAt", "desc").limit(100).onSnapshot(snap => { clearTimeout(timer); lib = snap.docs.map(d => Object.assign({ id: d.id }, d.data())); if (state.tab === "start") renderLibrary(); setSave("Saved", "ok"); },
+    () => { clearTimeout(timer); setSave("Saved on this device", "local"); });
+}
+
+/* ================= tutorial ================= */
+const RA = (k, ch) => ((k.pose["Right Arm"] || {})[ch] || 0);
+const STEPS = [
+  { say: "Welcome! An animation is just a few poses, called keys, placed on a timeline. The app makes all the motion between them.", why: "Real animators work the same way: pose first, motion second.", info: true },
+  { say: "Tap the character's right arm (the arm on your left when it faces you), or the “R Arm” chip below.", done: () => state.part === "Right Arm" },
+  { say: "Drag the Raise slider past 90°. You just made your first key at 0.0s.", why: "Changing a pose makes a key automatically.", done: () => { const k = state.anim.keys.find(k => k.t < 0.02); return k && RA(k, "z") > 90; } },
+  { say: "Tap the timeline at 0.5s, then drag Raise back down below 40°.", why: "A new diamond appears: that's your second key.", done: () => state.anim.keys.some(k => k.t > 0.3 && k.t < 0.8 && RA(k, "z") < 40) },
+  { say: "Tap ▶ Play. The arm moves between your two poses on its own.", done: () => state.playedOnce },
+  { say: "Make it a wave: add keys at 0.75s (Raise high) and 1.0s (Raise lower), then play.", why: "Keys about 0.2–0.3s apart feel lively. Far apart feels slow and floaty.", done: () => { const v = state.anim.keys.map(k => RA(k, "z")); let flips = 0; for (let i = 2; i < v.length; i++) if ((v[i] - v[i - 1]) * (v[i - 1] - v[i - 2]) < 0) flips++; return state.anim.keys.length >= 4 && flips >= 2; } },
+  { say: "Now a punch. Open the Start tab and tap “Fight stance”.", why: "Starting from a stance beats starting from a stiff T-pose.", done: () => state.anim.fromStarter === "Fight stance" },
+  { say: "Wind-up: tap the timeline at 0.25s and pull the right arm back (Swing below −20°).", why: "This is called anticipation: a small move the opposite way first makes the hit read.", done: () => state.anim.keys.some(k => k.t > 0.1 && RA(k, "x") < -20) },
+  { say: "Punch: at 0.4s swing the right arm forward (Swing above 80°). Then go back to the wind-up key, open the Key tab and set its Feel to Snap.", why: "Snap makes the arm shoot out fast instead of easing.", done: () => { const ks = state.anim.keys; return ks.some((k, i) => RA(k, "x") < -20 && k.feel === "snap" && ks[i + 1] && RA(ks[i + 1], "x") > 80 && ks[i + 1].t - k.t <= 0.35); } },
+  { say: "Hold the hit: add a key at about 0.55s with the arm still out (Swing above 70°), then a key at 0.9s back in stance. Play it at ¼× and 1×.", why: "Freezing on the hit for a moment is what makes punches feel heavy.", done: () => { const ks = state.anim.keys; const p = ks.findIndex(k => RA(k, "x") > 80); return p >= 0 && ks[p + 1] && RA(ks[p + 1], "x") > 70 && ks.length >= p + 3; } },
+  { say: "That's the whole workflow: block the key poses, then fix the timing. Everything saves automatically, and Claude can read these to turn them into Roblox animations.", info: true, last: true },
+];
+let step = -1;
+function showStep() { const c = $("coach"); if (step < 0 || step >= STEPS.length) { c.hidden = true; requestAnimationFrame(resize); return; } const s = STEPS[step]; c.hidden = false; c.classList.toggle("done", !!s.last);
+  $("c-step").textContent = `Step ${step + 1} of ${STEPS.length}`; $("c-say").textContent = s.say; $("c-why").textContent = s.why || ""; $("c-why").hidden = !s.why;
+  $("c-next").hidden = !s.info; $("c-next").textContent = s.last ? "Finish" : "Next"; $("c-skip").hidden = !!s.last; $("c-skip").textContent = s.info ? "Skip tutorial" : "Skip"; requestAnimationFrame(resize); }
+function tutorialCheck() { if (step < 0 || step >= STEPS.length) return; const s = STEPS[step]; if (!s.info && s.done && s.done()) { step++; showStep(); try { localStorage.setItem("r6anim-step", String(step)); } catch (e) {} } }
+$("c-next").onclick = () => { step++; if (step >= STEPS.length) step = 99; showStep(); try { localStorage.setItem("r6anim-step", String(step)); } catch (e) {} };
+$("c-skip").onclick = () => { step = 99; showStep(); try { localStorage.setItem("r6anim-step", "99"); } catch (e) {} };
+$("b-help").onclick = () => { step = 0; showStep(); };
+
+/* ================= boot + loop ================= */
+function afterLoad(keepTime) { if (!keepTime) { state.t = 0; state.selKey = 0; } $("name").value = state.anim.name || "My Animation";
+  $("b-loop").setAttribute("aria-pressed", String(!!state.anim.loop)); $("b-loop").style.color = state.anim.loop ? "var(--accent)" : ""; stop(); renderTimeline(); renderPartChips(); syncPanels(); syncUndo(); highlight(); }
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (state.playing) { const end = endTime(); state.t += dt * state.speed; if (state.t > end) { state.playedOnce = true; tutorialCheck(); if (state.anim.loop) state.t = state.t > end + 0.35 ? 0 : state.t; else { state.t = end; stop(); syncPanels(); } }
+    updatePlayhead(); const x = 16 + Math.min(state.t, end) * PX; if (x > tl.scrollLeft + tl.clientWidth - 30 || x < tl.scrollLeft) tl.scrollLeft = x - 40; }
+  if (!document.hidden) {
+    const t = Math.min(state.t, endTime()); applyPose(rig, R6.sample(state.anim, t));
+    const ks = state.anim.keys; let prev = null, next = null;
+    if (state.ghosts && !state.playing) { for (const k of ks) { if (k.t < t - 0.02) prev = k; if (k.t > t + 0.02 && !next) next = k; } }
+    ghostPrev.g.visible = !!prev; ghostNext.g.visible = !!next; if (prev) applyPose(ghostPrev, prev.pose); if (next) applyPose(ghostNext, next.pose);
+    placeCamera(); renderer.render(scene, camera);
+  }
+  requestAnimationFrame(tick);
+}
+(function boot() {
+  const all = localAll(); let lastId = null; try { lastId = localStorage.getItem("r6anim-last"); } catch (e) {}
+  state.anim = (lastId && all[lastId]) ? all[lastId] : newAnim();
+  renderStarters(); afterLoad(false); resize(); setSave("");
+  try { const s = localStorage.getItem("r6anim-step"); step = s === null ? 0 : +s; } catch (e) { step = 0; }
+  showStep(); connectDb(); requestAnimationFrame(tick);
+})();
+</script>
